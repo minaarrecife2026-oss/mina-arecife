@@ -375,6 +375,10 @@ display:inline-block;margin-right:6px;animation:pulse 2s infinite;}
 <div class="page" id="page-cartera">
 <div class="ptitle">Cartera</div>
 <div class="psub">Estado de cuentas por cobrar a clientes</div>
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+<button onclick="exportCarteraExcel()" style="background:var(--green);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📊 Descargar Excel</button>
+<button onclick="exportCarteraPDF()" style="background:var(--accent);color:#000;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📄 Descargar PDF</button>
+</div>
 <div class="kgrid" id="kgrid-cartera"></div>
 <div class="cartera-grid" id="cartera-cards"></div>
 <div class="twrap">
@@ -389,6 +393,10 @@ display:inline-block;margin-right:6px;animation:pulse 2s infinite;}
 <div class="page" id="page-movimientos">
 <div class="ptitle">Remisiones</div>
 <div class="psub">Historial completo de ingresos y ventas</div>
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+<button onclick="exportVentasExcel()" style="background:var(--green);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📊 Descargar Excel</button>
+<button onclick="exportVentasPDF()" style="background:var(--accent);color:#000;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📄 Descargar PDF</button>
+</div>
 <div class="tabs">
 <div class="tab active" onclick="filterMovTab('todos',this)">Todos</div>
 <div class="tab" onclick="filterMovTab('INGRESO',this)">Ingresos</div>
@@ -1092,28 +1100,48 @@ document.getElementById('tbl-cartera').innerHTML=pends.length?pends.map(function
 var mat=getMat(v.matId);
 return '<tr><td>'+v.fecha+'</td><td><b>'+v.clienteNombre+'</b></td><td>'+(mat?mat.nombre:'?')+'</td>'+
 '<td><span class="badge '+fpClass(v.fpago)+'">'+v.fpago+'</span></td>'+
-'<td style="font-weight:600;color:var(--red)">'+fmt(v.total)+'</td>'+
-'<td>'+estadoBadge(v.estado)+'</td><td style="color:var(--text3)">'+v.remision+'</td></tr>';
-}).join(''):'<tr class="empty-row"><td colspan="7">✅ No hay deudas pendientes</td></tr>';
+'<td style="font-weight:600;color:var(--red)">'+fmt(v.total-(v.totalPagado||0))+'<br><small style="color:var(--text3);font-weight:400;">Total: '+fmt(v.total)+'</small></td>'+
+'<td>'+estadoBadge(v.estado)+'</td>'+
+'<td style="color:var(--text3)">'+v.remision+'</td>'+
+'<td><button onclick="registrarCobro(\''+v.id+'\')" style="background:#22C55E;color:#fff;border:none;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-weight:700;">💰 Cobrar</button></td>'+
+'</tr>';
+}).join(''):'<tr class="empty-row"><td colspan="8">✅ No hay deudas pendientes</td></tr>';
 }
 
 function registrarCobro(mid){
+var mov=movimientos.find(function(m){return m.id===mid;});
+if(!mov)return;
+var saldoPend=mov.total-(mov.totalPagado||0);
+var tipo=prompt('¿Qué tipo de pago es?\n\n1. Pago Total ('+fmt(saldoPend)+')\n2. Anticipo / Pago Parcial\n\nEscribe 1 o 2:');
+if(!tipo)return;
+var monto=saldoPend;
+if(tipo.trim()==='2'){
+var montoStr=prompt('¿Cuánto abona el cliente?\n(Saldo pendiente: '+fmt(saldoPend)+')');
+if(!montoStr)return;
+monto=parseFloat(montoStr.replace(/[^0-9.]/g,''));
+if(isNaN(monto)||monto<=0){alert('Monto inválido');return;}
+if(monto>saldoPend){alert('El monto no puede ser mayor al saldo pendiente');return;}
+}
 var formas=['Efectivo','Transferencia','Cheque','Consignacion','Otro'];
 var opciones=formas.map(function(f,i){return (i+1)+'. '+f;}).join('\n');
 var forma=prompt('¿Cómo pagó el cliente?\n\n'+opciones+'\n\nEscribe el número o el nombre:');
 if(!forma)return;
 var formaNombre=formas[parseInt(forma)-1]||forma;
-var mov=movimientos.find(function(m){return m.id===mid;});
-if(!mov)return;
-mov.estado='Pagado';
+var nuevoTotalPagado=(mov.totalPagado||0)+monto;
+var nuevoSaldo=mov.total-nuevoTotalPagado;
+var nuevoEstado=nuevoSaldo<=0?'Pagado':'Parcial';
+mov.totalPagado=nuevoTotalPagado;
+mov.estado=nuevoEstado;
 mov.formaCobro=formaNombre;
 mov.fechaCobro=today();
+if(!mov.anticipos)mov.anticipos=[];
+mov.anticipos.push({fecha:today(),monto:monto,forma:formaNombre});
 if(typeof db!=='undefined'&&db){
 var ref=db.collection('movimientos').doc(mid);
-ref.update({estado:'Pagado',formaCobro:formaNombre,fechaCobro:today()}).catch(function(e){console.log(e);});
+ref.update({estado:nuevoEstado,totalPagado:nuevoTotalPagado,formaCobro:formaNombre,fechaCobro:today(),anticipos:mov.anticipos}).catch(function(e){console.log(e);});
 }
 renderCartera();
-showToast('✅ Pago registrado: '+formaNombre);
+showToast('✅ Abono registrado: '+fmt(monto)+' ('+formaNombre+'). Saldo: '+fmt(nuevoSaldo));
 }
 
 // ======================================================
@@ -1495,6 +1523,117 @@ win.document.close();
 win.focus();
 }
 window.printRemision=printRemision;
+
+// ======================================================
+// EXPORTAR EXCEL Y PDF
+// ======================================================
+
+function exportToCSV(rows, headers, filename){
+var csv=[headers.join(',')];
+rows.forEach(function(r){
+csv.push(r.map(function(c){
+var s=String(c||'').replace(/"/g,'""');
+return '"'+s+'"';
+}).join(','));
+});
+var blob=new Blob(['﻿'+csv.join('\n')],{type:'text/csv;charset=utf-8;'});
+var url=URL.createObjectURL(blob);
+var a=document.createElement('a');
+a.href=url; a.download=filename; a.click();
+URL.revokeObjectURL(url);
+}
+
+function exportCarteraExcel(){
+var ventas=movimientos.filter(function(m){return m.tipo==='VENTA';});
+var headers=['Fecha','Remision','Cliente','CC/NIT','Material','Cantidad','Total','Pagado','Saldo','F.Pago','Estado','Fecha Cobro','Forma Cobro'];
+var rows=ventas.map(function(v){
+var mat=getMat(v.matId);
+var pagado=v.totalPagado||0;
+var saldo=v.total-pagado;
+return [v.fecha,v.remision,v.clienteNombre,v.cedula||'',mat?mat.nombre:v.matId,v.cant,v.total,pagado,saldo,v.fpago,v.estado||'',v.fechaCobro||'',v.formaCobro||''];
+});
+exportToCSV(rows,headers,'Cartera_'+today()+'.csv');
+showToast('✅ Excel descargado');
+}
+
+function exportVentasExcel(){
+var ventas=movimientos.filter(function(m){return m.tipo==='VENTA';});
+var headers=['Fecha','Hora','Remision','Cliente','CC/NIT','Obra','Placa','Destino','Material','Cantidad','Precio','Subtotal','IVA','Total','F.Pago','Estado'];
+var rows=ventas.map(function(v){
+var mat=getMat(v.matId);
+var sub=v.cant*v.precio;
+return [v.fecha,v.hora,v.remision,v.clienteNombre,v.cedula||'',v.obra||'',v.placa||'',v.destino||'',mat?mat.nombre:v.matId,v.cant,v.precio,sub,v.iva||0,v.total,v.fpago,v.estado||''];
+});
+exportToCSV(rows,headers,'Ventas_'+today()+'.csv');
+showToast('✅ Excel descargado');
+}
+
+function exportCarteraPDF(){
+var ventas=movimientos.filter(function(m){return m.tipo==='VENTA';});
+var totalPend=ventas.filter(function(v){return v.estado==='Pendiente'||v.estado==='Parcial';}).reduce(function(a,b){return a+(b.total-(b.totalPagado||0));},0);
+var filas=ventas.map(function(v){
+var mat=getMat(v.matId);
+var saldo=v.total-(v.totalPagado||0);
+return '<tr><td>'+v.fecha+'</td><td>'+v.remision+'</td><td>'+v.clienteNombre+'</td><td>'+(v.cedula||'')+'</td><td>'+(mat?mat.nombre:v.matId)+'</td><td style="text-align:right">'+fmt(v.total)+'</td><td style="text-align:right;color:'+(saldo>0?'#c00':'#080')+'">'+fmt(saldo)+'</td><td>'+v.fpago+'</td><td>'+(v.estado||'')+'</td></tr>';
+}).join('');
+var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'+
+'body{font-family:Arial;font-size:10px;margin:15mm;}'+
+'h1{font-size:16px;text-align:center;margin-bottom:4px;}'+
+'.sub{text-align:center;font-size:11px;color:#666;margin-bottom:12px;}'+
+'.kpi{display:inline-block;background:#f5f5f5;padding:8px 16px;border-radius:6px;margin:4px;font-size:12px;}'+
+'.kpi b{display:block;font-size:16px;color:#c00;}'+
+'table{width:100%;border-collapse:collapse;margin-top:12px;}'+
+'th{background:#222;color:#fff;padding:5px;text-align:left;font-size:10px;}'+
+'td{padding:4px 5px;border-bottom:1px solid #eee;font-size:10px;}'+
+'tr:nth-child(even){background:#f9f9f9;}'+
+'.total{text-align:right;font-weight:700;font-size:12px;margin-top:8px;}'+
+'</style></head><body>'+
+'<h1>BROUS INVESTMENTS SAS — INFORME DE CARTERA</h1>'+
+'<div class="sub">NIT: 901.471.724-2 | Fecha: '+today()+'</div>'+
+'<div><span class="kpi">Total Pendiente<b>'+fmt(totalPend)+'</b></span>'+
+'<span class="kpi">Total Remisiones<b>'+ventas.length+'</b></span></div>'+
+'<table><thead><tr><th>Fecha</th><th>Remisión</th><th>Cliente</th><th>CC/NIT</th><th>Material</th><th>Total</th><th>Saldo</th><th>F.Pago</th><th>Estado</th></tr></thead><tbody>'+filas+'</tbody></table>'+
+'<div class="total">TOTAL PENDIENTE: '+fmt(totalPend)+'</div>'+
+'<div class="no-print" style="text-align:center;margin-top:20px;"><button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:10px 24px;font-size:13px;border-radius:6px;cursor:pointer;">🖨 Imprimir / Guardar PDF</button></div>'+
+'</body></html>';
+var win=window.open('','_blank','width=900,height=700');
+win.document.write(html);
+win.document.close();
+}
+
+function exportVentasPDF(){
+var ventas=movimientos.filter(function(m){return m.tipo==='VENTA';});
+var totalVentas=ventas.reduce(function(a,b){return a+b.total;},0);
+var filas=ventas.map(function(v){
+var mat=getMat(v.matId);
+return '<tr><td>'+v.fecha+'</td><td>'+v.remision+'</td><td>'+v.clienteNombre+'</td><td>'+(mat?mat.nombre:v.matId)+'</td><td style="text-align:center">'+v.cant+'</td><td style="text-align:right">'+fmt(v.precio)+'</td><td style="text-align:right">'+fmt(v.iva||0)+'</td><td style="text-align:right;font-weight:700">'+fmt(v.total)+'</td><td>'+v.fpago+'</td><td>'+(v.estado||'')+'</td></tr>';
+}).join('');
+var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'+
+'body{font-family:Arial;font-size:10px;margin:15mm;}'+
+'h1{font-size:16px;text-align:center;margin-bottom:4px;}'+
+'.sub{text-align:center;font-size:11px;color:#666;margin-bottom:12px;}'+
+'.kpi{display:inline-block;background:#f5f5f5;padding:8px 16px;border-radius:6px;margin:4px;font-size:12px;}'+
+'.kpi b{display:block;font-size:16px;color:#1a7a1a;}'+
+'table{width:100%;border-collapse:collapse;margin-top:12px;}'+
+'th{background:#222;color:#fff;padding:5px;text-align:left;font-size:10px;}'+
+'td{padding:4px 5px;border-bottom:1px solid #eee;font-size:10px;}'+
+'tr:nth-child(even){background:#f9f9f9;}'+
+'.total{text-align:right;font-weight:700;font-size:12px;margin-top:8px;}'+
+'@media print{.no-print{display:none}}'+
+'</style></head><body>'+
+'<h1>BROUS INVESTMENTS SAS — INFORME DE VENTAS</h1>'+
+'<div class="sub">NIT: 901.471.724-2 | Fecha: '+today()+'</div>'+
+'<div><span class="kpi">Total Ventas<b>'+fmt(totalVentas)+'</b></span>'+
+'<span class="kpi">N° Remisiones<b>'+ventas.length+'</b></span></div>'+
+'<table><thead><tr><th>Fecha</th><th>Remisión</th><th>Cliente</th><th>Material</th><th>Cant</th><th>Precio</th><th>IVA</th><th>Total</th><th>F.Pago</th><th>Estado</th></tr></thead><tbody>'+filas+'</tbody></table>'+
+'<div class="total">TOTAL VENTAS: '+fmt(totalVentas)+'</div>'+
+'<div class="no-print" style="text-align:center;margin-top:20px;"><button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:10px 24px;font-size:13px;border-radius:6px;cursor:pointer;">🖨 Imprimir / Guardar PDF</button></div>'+
+'</body></html>';
+var win=window.open('','_blank','width=900,height=700');
+win.document.write(html);
+win.document.close();
+}
+
 </script>
 
 </body>
