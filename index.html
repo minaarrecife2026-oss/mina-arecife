@@ -1109,7 +1109,7 @@ return '<tr><td>'+v.fecha+'</td><td><b>'+v.clienteNombre+'</b></td><td>'+(mat?ma
 }
 
 function registrarCobro(mid){
-var mov=movimientos.find(function(m){return m.id===mid;});
+var mov=movimientos.find(function(m){return (m.id===mid||m._id===mid);});
 if(!mov)return;
 var saldoPend=mov.total-(mov.totalPagado||0);
 var tipo=prompt('¿Qué tipo de pago es?\n\n1. Pago Total ('+fmt(saldoPend)+')\n2. Anticipo / Pago Parcial\n\nEscribe 1 o 2:');
@@ -1137,7 +1137,7 @@ mov.fechaCobro=today();
 if(!mov.anticipos)mov.anticipos=[];
 mov.anticipos.push({fecha:today(),monto:monto,forma:formaNombre});
 if(typeof db!=='undefined'&&db){
-var ref=db.collection('movimientos').doc(mid);
+var ref=db.collection('movimientos').doc(mid||mov._id);
 ref.update({estado:nuevoEstado,totalPagado:nuevoTotalPagado,formaCobro:formaNombre,fechaCobro:today(),anticipos:mov.anticipos}).catch(function(e){console.log(e);});
 }
 renderCartera();
@@ -1529,14 +1529,15 @@ window.printRemision=printRemision;
 // ======================================================
 
 function exportToCSV(rows, headers, filename){
-var csv=[headers.join(',')];
+var sep=';';
+var csv=[headers.join(sep)];
 rows.forEach(function(r){
 csv.push(r.map(function(c){
 var s=String(c||'').replace(/"/g,'""');
 return '"'+s+'"';
-}).join(','));
+}).join(sep));
 });
-var blob=new Blob(['﻿'+csv.join('\n')],{type:'text/csv;charset=utf-8;'});
+var blob=new Blob(['﻿'+csv.join('\r\n')],{type:'text/csv;charset=utf-8;'});
 var url=URL.createObjectURL(blob);
 var a=document.createElement('a');
 a.href=url; a.download=filename; a.click();
