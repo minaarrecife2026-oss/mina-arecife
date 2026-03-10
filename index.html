@@ -389,6 +389,52 @@ display:inline-block;margin-right:6px;animation:pulse 2s infinite;}
 </div>
 </div>
 
+<!-- PAGINA COBRO -->
+<div class="page" id="page-cobro">
+<div class="ptitle">💰 Registrar Cobro</div>
+<div class="psub">Registra el pago de una remisión a crédito</div>
+<div class="fwrap" style="max-width:480px;">
+<div class="fwrap-title">Detalle del Cobro</div>
+<div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:20px;font-size:13px;line-height:2;">
+<div><b>Remisión:</b> <span id="pc-remision"></span></div>
+<div><b>Cliente:</b> <span id="pc-cliente"></span></div>
+<div><b>Total:</b> <span id="pc-total"></span></div>
+<div><b style="color:var(--red);">Saldo Pendiente:</b> <span id="pc-saldo" style="color:var(--red);font-weight:700;"></span></div>
+</div>
+<div class="frow">
+<div class="fg">
+<label>Tipo de pago</label>
+<select id="pc-tipo" onchange="togglePcMonto()">
+<option value="total">Pago Total</option>
+<option value="parcial">Anticipo / Pago Parcial</option>
+</select>
+</div>
+</div>
+<div class="frow" id="pc-monto-wrap" style="display:none;">
+<div class="fg">
+<label>Monto del anticipo</label>
+<input type="number" id="pc-monto" placeholder="Ej: 200000">
+</div>
+</div>
+<div class="frow">
+<div class="fg">
+<label>Forma de pago</label>
+<select id="pc-forma">
+<option value="Efectivo">Efectivo</option>
+<option value="Transferencia">Transferencia</option>
+<option value="Cheque">Cheque</option>
+<option value="Consignacion">Consignación</option>
+<option value="Otro">Otro</option>
+</select>
+</div>
+</div>
+<div class="frow">
+<button class="btn-primary" onclick="confirmarPcCobro()" style="flex:1;">✅ Confirmar Cobro</button>
+<button class="btn-sec" onclick="go('cartera')" style="flex:1;">Cancelar</button>
+</div>
+</div>
+</div>
+
 <!-- ── MOVIMIENTOS ─────────────── -->
 <div class="page" id="page-movimientos">
 <div class="ptitle">Remisiones</div>
@@ -1108,29 +1154,49 @@ return '<tr><td>'+v.fecha+'</td><td><b>'+v.clienteNombre+'</b></td><td>'+(mat?ma
 }).join(''):'<tr class="empty-row"><td colspan="8">✅ No hay deudas pendientes</td></tr>';
 }
 
-var _cobroMid=null;
-function registrarCobro(mid){
-_cobroMid=mid;
-var mov=null;
-for(var i=0;i<movimientos.length;i++){
-if(movimientos[i]._id===mid||movimientos[i].id===mid||movimientos[i].remision===mid){
-mov=movimientos[i]; break;
-}
-}
-if(!mov){
-// Intentar por índice si mid es número
-mov=movimientos[parseInt(mid)];
-}
-if(!mov){showToast('Error: remision no encontrada'); return;}
+var _cobroRemision=null;
+function abrirCobro(remision){
+_cobroRemision=remision;
+var mov=movimientos.find(function(m){return m.remision===remision;});
+if(!mov){showToast('No se encontro la remision');return;}
 var saldo=mov.total-(mov.totalPagado||0);
-var el=document.getElementById('cobro-info');
-if(el) el.innerHTML='<b>'+(mov.clienteNombre||'')+'</b><br>Remision: '+(mov.remision||'')+
-'<br>Total: '+fmt(mov.total)+'<br><span style="color:#ef4444;font-weight:700;">Saldo: '+fmt(saldo)+'</span>';
-document.getElementById('cobro-tipo').value='total';
-document.getElementById('cobro-monto').value='';
-document.getElementById('cobro-monto-div').style.display='none';
-var modal=document.getElementById('modal-cobro');
-if(modal){modal.style.display='flex';}else{showToast('Error: modal no encontrado');}
+document.getElementById('pc-remision').textContent=mov.remision;
+document.getElementById('pc-cliente').textContent=mov.clienteNombre;
+document.getElementById('pc-total').textContent=fmt(mov.total);
+document.getElementById('pc-saldo').textContent=fmt(saldo);
+document.getElementById('pc-monto').value='';
+document.getElementById('pc-tipo').value='total';
+document.getElementById('pc-monto-wrap').style.display='none';
+go('page-cobro');
+}
+function togglePcMonto(){
+var t=document.getElementById('pc-tipo').value;
+document.getElementById('pc-monto-wrap').style.display=t==='parcial'?'block':'none';
+}
+function confirmarPcCobro(){
+var remision=_cobroRemision;
+var mov=movimientos.find(function(m){return m.remision===remision;});
+if(!mov)return;
+var saldoPend=mov.total-(mov.totalPagado||0);
+var tipo=document.getElementById('pc-tipo').value;
+var monto=tipo==='total'?saldoPend:parseFloat(document.getElementById('pc-monto').value)||0;
+var forma=document.getElementById('pc-forma').value;
+if(monto<=0||monto>saldoPend){showToast('Monto invalido');return;}
+var nuevoTotalPagado=(mov.totalPagado||0)+monto;
+var nuevoSaldo=mov.total-nuevoTotalPagado;
+var nuevoEstado=nuevoSaldo<=0?'Pagado':'Parcial';
+mov.totalPagado=nuevoTotalPagado;
+mov.estado=nuevoEstado;
+mov.formaCobro=forma;
+mov.fechaCobro=today();
+if(!mov.anticipos)mov.anticipos=[];
+mov.anticipos.push({fecha:today(),monto:monto,forma:forma});
+var fbId=mov._id||mov.id;
+if(typeof db!=='undefined'&&db&&fbId){
+db.collection('movimientos').doc(fbId).update({estado:nuevoEstado,totalPagado:nuevoTotalPagado,formaCobro:forma,fechaCobro:today(),anticipos:mov.anticipos}).catch(function(e){console.log(e);});
+}
+showToast('Cobro registrado: '+fmt(monto)+' ('+forma+')');
+go('cartera');
 }
 
 function toggleMontoAnticipos(){
