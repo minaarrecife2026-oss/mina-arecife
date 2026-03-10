@@ -1108,25 +1108,37 @@ return '<tr><td>'+v.fecha+'</td><td><b>'+v.clienteNombre+'</b></td><td>'+(mat?ma
 }).join(''):'<tr class="empty-row"><td colspan="8">✅ No hay deudas pendientes</td></tr>';
 }
 
+var _cobroMid=null;
 function registrarCobro(mid){
+_cobroMid=mid;
+var mov=movimientos.find(function(m){return (m.id===mid||m._id===mid);});
+if(!mov)return;
+var saldo=mov.total-(mov.totalPagado||0);
+document.getElementById('cobro-info').innerHTML=
+'<b>'+mov.clienteNombre+'</b><br>Remision: '+mov.remision+
+'<br>Total: '+fmt(mov.total)+'<br><span style="color:var(--red);font-weight:700;">Saldo pendiente: '+fmt(saldo)+'</span>';
+document.getElementById('cobro-tipo').value='total';
+document.getElementById('cobro-monto').value='';
+document.getElementById('cobro-monto-div').style.display='none';
+document.getElementById('modal-cobro').style.display='flex';
+}
+function toggleMontoAnticipos(){
+var tipo=document.getElementById('cobro-tipo').value;
+document.getElementById('cobro-monto-div').style.display=tipo==='parcial'?'block':'none';
+}
+function cerrarModalCobro(){
+document.getElementById('modal-cobro').style.display='none';
+_cobroMid=null;
+}
+function confirmarCobro(){
+var mid=_cobroMid;
 var mov=movimientos.find(function(m){return (m.id===mid||m._id===mid);});
 if(!mov)return;
 var saldoPend=mov.total-(mov.totalPagado||0);
-var tipo=prompt('¿Qué tipo de pago es?\n\n1. Pago Total ('+fmt(saldoPend)+')\n2. Anticipo / Pago Parcial\n\nEscribe 1 o 2:');
-if(!tipo)return;
-var monto=saldoPend;
-if(tipo.trim()==='2'){
-var montoStr=prompt('¿Cuánto abona el cliente?\n(Saldo pendiente: '+fmt(saldoPend)+')');
-if(!montoStr)return;
-monto=parseFloat(montoStr.replace(/[^0-9.]/g,''));
-if(isNaN(monto)||monto<=0){alert('Monto inválido');return;}
-if(monto>saldoPend){alert('El monto no puede ser mayor al saldo pendiente');return;}
-}
-var formas=['Efectivo','Transferencia','Cheque','Consignacion','Otro'];
-var opciones=formas.map(function(f,i){return (i+1)+'. '+f;}).join('\n');
-var forma=prompt('¿Cómo pagó el cliente?\n\n'+opciones+'\n\nEscribe el número o el nombre:');
-if(!forma)return;
-var formaNombre=formas[parseInt(forma)-1]||forma;
+var tipo=document.getElementById('cobro-tipo').value;
+var monto=tipo==='total'?saldoPend:parseFloat(document.getElementById('cobro-monto').value)||0;
+var formaNombre=document.getElementById('cobro-forma').value;
+if(monto<=0||monto>saldoPend){showToast('Monto invalido');return;}
 var nuevoTotalPagado=(mov.totalPagado||0)+monto;
 var nuevoSaldo=mov.total-nuevoTotalPagado;
 var nuevoEstado=nuevoSaldo<=0?'Pagado':'Parcial';
@@ -1136,17 +1148,16 @@ mov.formaCobro=formaNombre;
 mov.fechaCobro=today();
 if(!mov.anticipos)mov.anticipos=[];
 mov.anticipos.push({fecha:today(),monto:monto,forma:formaNombre});
+var fbId=mov._id||mid;
 if(typeof db!=='undefined'&&db){
-var ref=db.collection('movimientos').doc(mid||mov._id);
-ref.update({estado:nuevoEstado,totalPagado:nuevoTotalPagado,formaCobro:formaNombre,fechaCobro:today(),anticipos:mov.anticipos}).catch(function(e){console.log(e);});
+db.collection('movimientos').doc(fbId).update({estado:nuevoEstado,totalPagado:nuevoTotalPagado,formaCobro:formaNombre,fechaCobro:today(),anticipos:mov.anticipos}).catch(function(e){console.log(e);});
 }
+cerrarModalCobro();
 renderCartera();
-showToast('✅ Abono registrado: '+fmt(monto)+' ('+formaNombre+'). Saldo: '+fmt(nuevoSaldo));
+showToast('Abono: '+fmt(monto)+' ('+formaNombre+'). Saldo: '+fmt(nuevoSaldo));
 }
 
-// ======================================================
-// MOVIMIENTOS
-// ======================================================
+
 function renderMovs(){
 var data=[].concat(movimientos).reverse();
 if(movTabFilter!=='todos') data=data.filter(function(m){return m.tipo===movTabFilter;});
@@ -1637,5 +1648,71 @@ win.document.close();
 
 </script>
 
+
+<!-- MODAL COBRO -->
+<div id="modal-cobro" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+<div style="background:var(--card);border-radius:16px;padding:28px;width:380px;max-width:95vw;border:1px solid var(--border);">
+<div style="font-size:18px;font-weight:700;margin-bottom:20px;color:var(--text1);">💰 Registrar Cobro</div>
+<div id="cobro-info" style="background:var(--surface2);padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;color:var(--text2);"></div>
+<div style="margin-bottom:14px;">
+<label style="font-size:12px;color:var(--text3);margin-bottom:6px;display:block;">Tipo de pago</label>
+<select id="cobro-tipo" onchange="toggleMontoAnticipos()" style="width:100%;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text1);font-size:13px;">
+<option value="total">Pago Total</option>
+<option value="parcial">Anticipo / Pago Parcial</option>
+</select>
+</div>
+<div id="cobro-monto-div" style="display:none;margin-bottom:14px;">
+<label style="font-size:12px;color:var(--text3);margin-bottom:6px;display:block;">Monto del anticipo</label>
+<input type="number" id="cobro-monto" placeholder="Ej: 200000" style="width:100%;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text1);font-size:13px;">
+</div>
+<div style="margin-bottom:20px;">
+<label style="font-size:12px;color:var(--text3);margin-bottom:6px;display:block;">Forma de pago</label>
+<select id="cobro-forma" style="width:100%;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text1);font-size:13px;">
+<option value="Efectivo">Efectivo</option>
+<option value="Transferencia">Transferencia</option>
+<option value="Cheque">Cheque</option>
+<option value="Consignacion">Consignación</option>
+<option value="Otro">Otro</option>
+</select>
+</div>
+<div style="display:flex;gap:10px;">
+<button onclick="confirmarCobro()" style="flex:1;background:var(--green);color:#fff;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✅ Confirmar</button>
+<button onclick="cerrarModalCobro()" style="flex:1;background:var(--surface2);color:var(--text2);border:1px solid var(--border);padding:12px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>
+</div>
+</div>
+</div>
+
+<!-- MODAL COBRO -->
+<div id="modal-cobro" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center;">
+<div style="background:var(--card);border-radius:16px;padding:28px;width:380px;max-width:95vw;border:1px solid var(--border);">
+<div style="font-size:18px;font-weight:700;margin-bottom:20px;color:var(--text1);">💰 Registrar Cobro</div>
+<div id="cobro-info" style="background:var(--surface2);padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;color:var(--text2);line-height:1.8;"></div>
+<div style="margin-bottom:14px;">
+<label style="font-size:12px;color:var(--text3);margin-bottom:6px;display:block;">Tipo de pago</label>
+<select id="cobro-tipo" onchange="toggleMontoAnticipos()" style="width:100%;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text1);font-size:13px;">
+<option value="total">Pago Total</option>
+<option value="parcial">Anticipo / Pago Parcial</option>
+</select>
+</div>
+<div id="cobro-monto-div" style="display:none;margin-bottom:14px;">
+<label style="font-size:12px;color:var(--text3);margin-bottom:6px;display:block;">Monto del anticipo</label>
+<input type="number" id="cobro-monto" placeholder="Ej: 200000" style="width:100%;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text1);font-size:13px;">
+</div>
+<div style="margin-bottom:20px;">
+<label style="font-size:12px;color:var(--text3);margin-bottom:6px;display:block;">Forma de pago</label>
+<select id="cobro-forma" style="width:100%;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text1);font-size:13px;">
+<option value="Efectivo">Efectivo</option>
+<option value="Transferencia">Transferencia</option>
+<option value="Cheque">Cheque</option>
+<option value="Consignacion">Consignacion</option>
+<option value="Otro">Otro</option>
+</select>
+</div>
+<div style="display:flex;gap:10px;">
+<button onclick="confirmarCobro()" style="flex:1;background:var(--green);color:#fff;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✅ Confirmar</button>
+<button onclick="cerrarModalCobro()" style="flex:1;background:var(--surface2);color:var(--text2);border:1px solid var(--border);padding:12px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>
+</div>
+</div>
+</div>
 </body>
 </html>
