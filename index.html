@@ -1111,17 +1111,28 @@ return '<tr><td>'+v.fecha+'</td><td><b>'+v.clienteNombre+'</b></td><td>'+(mat?ma
 var _cobroMid=null;
 function registrarCobro(mid){
 _cobroMid=mid;
-var mov=movimientos.find(function(m){return (m.id===mid||m._id===mid);});
-if(!mov)return;
+var mov=null;
+for(var i=0;i<movimientos.length;i++){
+if(movimientos[i]._id===mid||movimientos[i].id===mid||movimientos[i].remision===mid){
+mov=movimientos[i]; break;
+}
+}
+if(!mov){
+// Intentar por índice si mid es número
+mov=movimientos[parseInt(mid)];
+}
+if(!mov){showToast('Error: remision no encontrada'); return;}
 var saldo=mov.total-(mov.totalPagado||0);
-document.getElementById('cobro-info').innerHTML=
-'<b>'+mov.clienteNombre+'</b><br>Remision: '+mov.remision+
-'<br>Total: '+fmt(mov.total)+'<br><span style="color:var(--red);font-weight:700;">Saldo pendiente: '+fmt(saldo)+'</span>';
+var el=document.getElementById('cobro-info');
+if(el) el.innerHTML='<b>'+(mov.clienteNombre||'')+'</b><br>Remision: '+(mov.remision||'')+
+'<br>Total: '+fmt(mov.total)+'<br><span style="color:#ef4444;font-weight:700;">Saldo: '+fmt(saldo)+'</span>';
 document.getElementById('cobro-tipo').value='total';
 document.getElementById('cobro-monto').value='';
 document.getElementById('cobro-monto-div').style.display='none';
-document.getElementById('modal-cobro').style.display='flex';
+var modal=document.getElementById('modal-cobro');
+if(modal){modal.style.display='flex';}else{showToast('Error: modal no encontrado');}
 }
+
 function toggleMontoAnticipos(){
 var tipo=document.getElementById('cobro-tipo').value;
 document.getElementById('cobro-monto-div').style.display=tipo==='parcial'?'block':'none';
