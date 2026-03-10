@@ -1470,9 +1470,10 @@ var html='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
 '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:8px 16px;font-size:12px;border-radius:4px;cursor:pointer;margin-left:6px;">Cerrar</button>'+
 '</div>'+
 '</body></html>';
-var win=window.open('','_blank','width=340,height=700');
+var win=window.open('','_blank','width=320,height=600,toolbar=0,menubar=0,location=0');
 win.document.write(html);
 win.document.close();
+win.focus();
 }
 window.printRemision=printRemision;
 </script>
