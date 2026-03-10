@@ -380,7 +380,7 @@ display:inline-block;margin-right:6px;animation:pulse 2s infinite;}
 <div class="twrap">
 <div class="thead2"><div class="ttitle">⏳ Deudas Pendientes</div></div>
 <div class="tscroll"><table><thead><tr>
-<th>Fecha</th><th>Cliente</th><th>Material</th><th>F.Pago</th><th>Total</th><th>Estado</th><th>Remisión</th>
+<th>Fecha</th><th>Cliente</th><th>Material</th><th>F.Pago</th><th>Total</th><th>Estado</th><th>Remisión</th><th>Cobro</th>
 </tr></thead><tbody id="tbl-cartera"></tbody></table></div>
 </div>
 </div>
@@ -1097,6 +1097,25 @@ return '<tr><td>'+v.fecha+'</td><td><b>'+v.clienteNombre+'</b></td><td>'+(mat?ma
 }).join(''):'<tr class="empty-row"><td colspan="7">✅ No hay deudas pendientes</td></tr>';
 }
 
+function registrarCobro(mid){
+var formas=['Efectivo','Transferencia','Cheque','Consignacion','Otro'];
+var opciones=formas.map(function(f,i){return (i+1)+'. '+f;}).join('\n');
+var forma=prompt('¿Cómo pagó el cliente?\n\n'+opciones+'\n\nEscribe el número o el nombre:');
+if(!forma)return;
+var formaNombre=formas[parseInt(forma)-1]||forma;
+var mov=movimientos.find(function(m){return m.id===mid;});
+if(!mov)return;
+mov.estado='Pagado';
+mov.formaCobro=formaNombre;
+mov.fechaCobro=today();
+if(typeof db!=='undefined'&&db){
+var ref=db.collection('movimientos').doc(mid);
+ref.update({estado:'Pagado',formaCobro:formaNombre,fechaCobro:today()}).catch(function(e){console.log(e);});
+}
+renderCartera();
+showToast('✅ Pago registrado: '+formaNombre);
+}
+
 // ======================================================
 // MOVIMIENTOS
 // ======================================================
@@ -1202,7 +1221,7 @@ var ivaRate=+(document.getElementById('v-iva-check').value)||0;
 var iva=sub*ivaRate; var total=sub+iva;
 var clienteNombre=nombre||(getCli(cid)?getCli(cid).nombre:'Anonimo');
 if(!cedula && getCli(cid) && getCli(cid).nit) cedula=getCli(cid).nit;
-var estado=(fp==='Cartera'||fp==='Crédito con IVA')?'Pendiente':'Pagado';
+var estado=(fp==='Cartera'||fp==='Crédito con IVA'||fp==='Crédito'||fp==='Credito'||fp.toLowerCase().includes('credit'))?'Pendiente':'Pagado';
 var h=hStr2(); var d=today();
 var mov={fecha:d,hora:h,tipo:'VENTA',clienteId:cid,clienteNombre:clienteNombre,
 matId:mid,cant:cant,precio:precio,iva:iva,total:total,fpago:fp,codigo:codigo,
