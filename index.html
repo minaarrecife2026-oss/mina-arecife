@@ -1682,37 +1682,5 @@ win.document.close();
 </div>
 </div>
 
-<!-- MODAL COBRO -->
-<div id="modal-cobro" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center;">
-<div style="background:var(--card);border-radius:16px;padding:28px;width:380px;max-width:95vw;border:1px solid var(--border);">
-<div style="font-size:18px;font-weight:700;margin-bottom:20px;color:var(--text1);">💰 Registrar Cobro</div>
-<div id="cobro-info" style="background:var(--surface2);padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;color:var(--text2);line-height:1.8;"></div>
-<div style="margin-bottom:14px;">
-<label style="font-size:12px;color:var(--text3);margin-bottom:6px;display:block;">Tipo de pago</label>
-<select id="cobro-tipo" onchange="toggleMontoAnticipos()" style="width:100%;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text1);font-size:13px;">
-<option value="total">Pago Total</option>
-<option value="parcial">Anticipo / Pago Parcial</option>
-</select>
-</div>
-<div id="cobro-monto-div" style="display:none;margin-bottom:14px;">
-<label style="font-size:12px;color:var(--text3);margin-bottom:6px;display:block;">Monto del anticipo</label>
-<input type="number" id="cobro-monto" placeholder="Ej: 200000" style="width:100%;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text1);font-size:13px;">
-</div>
-<div style="margin-bottom:20px;">
-<label style="font-size:12px;color:var(--text3);margin-bottom:6px;display:block;">Forma de pago</label>
-<select id="cobro-forma" style="width:100%;padding:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text1);font-size:13px;">
-<option value="Efectivo">Efectivo</option>
-<option value="Transferencia">Transferencia</option>
-<option value="Cheque">Cheque</option>
-<option value="Consignacion">Consignacion</option>
-<option value="Otro">Otro</option>
-</select>
-</div>
-<div style="display:flex;gap:10px;">
-<button onclick="confirmarCobro()" style="flex:1;background:var(--green);color:#fff;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">✅ Confirmar</button>
-<button onclick="cerrarModalCobro()" style="flex:1;background:var(--surface2);color:var(--text2);border:1px solid var(--border);padding:12px;border-radius:8px;font-size:14px;cursor:pointer;">Cancelar</button>
-</div>
-</div>
-</div>
 </body>
 </html>
