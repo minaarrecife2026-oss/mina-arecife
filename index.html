@@ -7,150 +7,132 @@
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg:#0B0F1A; --surface:#111827; --card:#1A2235; --card2:#1F2A40;
-            --border:#263047; --border2:#2E3D58;
-            --gold:#F5A623; --gold2:#E8630A; --gold-dim:rgba(245,166,35,0.12);
-            --green:#22C55E; --green-dim:rgba(34,197,94,0.12);
-            --red:#EF4444; --red-dim:rgba(239,68,68,0.12);
-            --blue:#3B82F6; --blue-dim:rgba(59,130,246,0.12);
+            --bg:#0B0F1A; --surface:#111827; --card:#1A2235; --border:#263047;
+            --gold:#F5A623; --gold2:#E8630A; --green:#22C55E; --red:#EF4444;
             --text:#E8EDF5; --text2:#9BAABF; --text3:#5C6E87;
             --font-h:'Oswald',sans-serif; --font-b:'Source Sans 3',sans-serif;
-            --r2:14px; --shadow:0 4px 24px rgba(0,0,0,0.4);
         }
         *{margin:0;padding:0;box-sizing:border-box;}
-        body{background:var(--bg);color:var(--text);font-family:var(--font-b);min-height:100vh;font-size:14px;}
+        body{background:var(--bg);color:var(--text);font-family:var(--font-b);overflow-x:hidden;}
         
         /* --- LOADING --- */
         #loading{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px;}
-        .loading-logo{font-family:var(--font-h);font-size:32px;color:var(--gold);letter-spacing:2px;text-align:center;}
-        .loading-bar{width:200px;height:3px;background:var(--border2);border-radius:2px;overflow:hidden;}
+        .loading-logo{font-family:var(--font-h);font-size:32px;color:var(--gold);text-align:center;letter-spacing:2px;}
+        .loading-bar{width:200px;height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
         .loading-fill{height:100%;background:var(--gold);animation:loadfill 1.5s infinite;}
         @keyframes loadfill{0%{width:0;margin-left:0}50%{width:60%;margin-left:0}100%{width:0;margin-left:200px}}
 
         /* --- LOGIN --- */
-        #login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 20% 50%, #1a2e10 0%, #0B0F1A 70%);}
-        .lbox{background:var(--surface);border:1px solid var(--border2);border-radius:20px;padding:40px;width:min(400px,95vw);box-shadow:var(--shadow);position:relative;overflow:hidden;}
-        .lbox::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--gold);}
-        .lbox label{display:block;font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:6px;letter-spacing:1px;}
-        .lbox input, .lbox select{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:12px;margin-bottom:20px;outline:none;}
-        .lbtn{width:100%;background:linear-gradient(135deg,var(--gold2),var(--gold));border:none;color:#000;font-family:var(--font-h);font-size:18px;font-weight:700;padding:14px;border-radius:8px;cursor:pointer;letter-spacing:1px;}
-        .lerr{color:var(--red);font-size:13px;margin-top:12px;display:none;text-align:center;}
+        #login{min-height:100vh;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 20% 50%, #1a2e10 0%, #0B0F1A 70%);}
+        .lbox{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px;width:min(400px,95vw);box-shadow:0 4px 24px rgba(0,0,0,0.4);position:relative;}
+        .lbox label{display:block;font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:6px;}
+        .lbox input, .lbox select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:12px;margin-bottom:20px;outline:none;}
+        .lbtn{width:100%;background:linear-gradient(135deg,var(--gold2),var(--gold));border:none;color:#000;font-family:var(--font-h);font-size:18px;font-weight:700;padding:14px;border-radius:8px;cursor:pointer;}
 
-        /* --- TOPBAR & APP --- */
+        /* --- APP --- */
         #app{display:none;}
         .topbar{background:var(--surface);border-bottom:1px solid var(--border);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;}
-        .tlogo{font-family:var(--font-h);font-size:20px;color:var(--gold);letter-spacing:2px;}
         .layout{display:flex;min-height:calc(100vh - 60px);}
         .sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);padding:20px 10px;}
-        .ni{display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;color:var(--text2);margin-bottom:4px;transition:0.2s;}
+        .ni{display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;color:var(--text2);margin-bottom:4px;}
         .ni:hover, .ni.active{background:var(--card);color:var(--gold);}
-        .main{flex:1;padding:30px;overflow-x:hidden;}
-
-        /* --- COMPONENTS --- */
+        .main{flex:1;padding:30px;}
         .page{display:none;} .page.active{display:block;}
-        .ptitle{font-family:var(--font-h);font-size:28px;margin-bottom:4px;}
-        .psub{color:var(--text3);margin-bottom:24px;}
         .kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;}
-        .kcard{background:var(--card);padding:20px;border-radius:var(--r2);border-left:4px solid var(--gold);}
-        .klabel{font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:8px;}
-        .kvalue{font-family:var(--font-h);font-size:24px;}
-        .twrap{background:var(--card);border-radius:var(--r2);overflow:hidden;border:1px solid var(--border);margin-bottom:24px;}
-        table{width:100%;border-collapse:collapse;}
-        th{background:var(--card2);padding:12px;text-align:left;color:var(--text3);font-size:11px;text-transform:uppercase;}
+        .kcard{background:var(--card);padding:20px;border-radius:12px;border-left:4px solid var(--gold);}
+        .twrap{background:var(--card);border-radius:12px;overflow:hidden;border:1px solid var(--border);}
+        table{width:100%;border-collapse:collapse;font-size:13px;}
+        th{background:rgba(255,255,255,0.05);padding:12px;text-align:left;color:var(--text3);}
         td{padding:12px;border-bottom:1px solid rgba(255,255,255,0.05);}
-        .badge{padding:4px 8px;border-radius:4px;font-size:11px;font-weight:700;}
-        .b-green{background:var(--green-dim);color:var(--green);}
-        .b-red{background:var(--red-dim);color:var(--red);}
-
-        /* --- FORMS --- */
-        .fwrap{background:var(--card);padding:24px;border-radius:var(--r2);margin-bottom:24px;}
-        .frow{display:flex;gap:16px;margin-bottom:16px;}
-        .fg{flex:1;display:flex;flex-direction:column;gap:6px;}
-        .fg label{font-size:11px;color:var(--text3);text-transform:uppercase;}
-        .fg input, .fg select{background:var(--bg);border:1px solid var(--border2);padding:10px;border-radius:8px;color:var(--text);outline:none;}
-        .btn-primary{background:var(--gold);color:#000;border:none;padding:12px 24px;border-radius:8px;font-family:var(--font-h);font-weight:700;cursor:pointer;}
-        
-        /* SYNC INDICATOR */
-        .sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;}
-        .online{background:var(--green);} .syncing{background:var(--gold);animation:pulse 1s infinite;}
-        @keyframes pulse{0%{opacity:1}50%{opacity:0.3}}
     </style>
 </head>
 <body>
 
 <div id="loading">
-    <div class="loading-logo">BROUS INVESTMENTS SAS<br><span style="font-size:12px;color:var(--text3)">Cargando sistema...</span></div>
+    <div class="loading-logo">BROUS INVESTMENTS SAS<br><span style="font-size:12px;color:var(--text3)">Iniciando sistema...</span></div>
     <div class="loading-bar"><div class="loading-fill"></div></div>
 </div>
 
 <div id="login">
     <div class="lbox">
-        <div class="tlogo" style="text-align:center;margin-bottom:20px">MINA ARRECIFE</div>
+        <h2 style="font-family:var(--font-h);color:var(--gold);margin-bottom:20px;text-align:center;">MINA ARRECIFE</h2>
         <label>Usuario</label>
-        <input type="text" id="l-user" placeholder="admin / secretaria">
+        <input type="text" id="l-user" value="admin">
         <label>Contraseña</label>
-        <input type="password" id="l-pass" placeholder="••••••••">
+        <input type="password" id="l-pass" value="admin2024">
         <label>Rol</label>
         <select id="l-role">
-            <option value="">— Selecciona —</option>
             <option value="admin">Administrador</option>
             <option value="secretaria">Secretaria</option>
         </select>
         <button class="lbtn" onclick="doLogin()">INGRESAR</button>
-        <div class="lerr" id="lerr">Credenciales incorrectas</div>
     </div>
 </div>
 
 <div id="app">
     <div class="topbar">
-        <div class="tlogo">MINA ARRECIFE</div>
-        <div style="display:flex;align-items:center;gap:20px;">
-            <div style="font-size:12px;color:var(--text3)"><span class="sync-dot online" id="sync-dot"></span><span id="sync-txt">En línea</span></div>
-            <div id="top-user" style="font-weight:600"></div>
-            <button onclick="doLogout()" style="background:none;border:1px solid var(--border2);color:var(--text3);padding:6px 12px;border-radius:6px;cursor:pointer">Salir</button>
-        </div>
+        <div style="font-family:var(--font-h);color:var(--gold);font-size:20px;">MINA ARRECIFE</div>
+        <div id="top-user" style="font-weight:600;font-size:14px;"></div>
     </div>
     <div class="layout">
         <div class="sidebar">
             <div class="ni active" onclick="go('dashboard')">📊 Dashboard</div>
             <div class="ni" onclick="go('cartera')">💳 Cartera</div>
-            <div class="ni" onclick="go('movimientos')">📋 Remisiones</div>
             <div class="ni" onclick="go('nueva-venta')">🧾 Nueva Venta</div>
-            <div class="ni" onclick="go('nuevo-ingreso')">🪨 Nuevo Ingreso</div>
         </div>
         <div class="main">
             <div class="page active" id="page-dashboard">
-                <div class="ptitle">Dashboard</div>
-                <div class="psub" id="dash-date"></div>
-                <div class="kgrid" id="kgrid"></div>
-                <div class="twrap">
-                    <table id="dash-ventas">
-                        <thead><tr><th>Fecha</th><th>Cliente</th><th>Total</th><th>Estado</th></tr></thead>
-                        <tbody id="dash-ventas-body"></tbody>
-                    </table>
+                <h1 style="font-family:var(--font-h);margin-bottom:20px;">Panel de Control</h1>
+                <div class="kgrid" id="kgrid">
+                    <div class="kcard">Total Ventas<br><b style="font-size:20px;">$ 0</b></div>
                 </div>
             </div>
-
             <div class="page" id="page-cartera">
-                <div class="ptitle">Cartera de Clientes</div>
-                <div class="psub">Control de deudas pendientes</div>
+                <h1 style="font-family:var(--font-h);margin-bottom:20px;">Cartera</h1>
                 <div class="twrap">
                     <table>
-                        <thead><tr><th>Fecha</th><th>Cliente</th><th>Total</th><th>Saldo Pend.</th><th>Acción</th></tr></thead>
+                        <thead><tr><th>Fecha</th><th>Cliente</th><th>Total</th><th>Estado</th></tr></thead>
                         <tbody id="tbl-cartera"></tbody>
                     </table>
                 </div>
             </div>
-
             <div class="page" id="page-nueva-venta">
-                <div class="ptitle">Nueva Remisión de Venta</div>
-                <div class="fwrap">
-                    <div class="frow">
-                        <div class="fg"><label>Cliente</label><input type="text" id="v-nombre"></div>
-                        <div class="fg"><label>Material</label><select id="v-material"></select></div>
-                    </div>
-                    <div class="frow">
-                        <div class="fg"><label>Cantidad</label><input type="number" id="v-cant" oninput="calcVenta()"></div>
-                        <div class="fg"><label>Precio</label><input type="number" id="v-precio" oninput="calcVenta()"></div>
-                    </div>
-                    <div class="frow">
+                <h1 style="font-family:var(--font-h);margin-bottom:20px;">Nueva Venta</h1>
+                <div style="background:var(--card);padding:20px;border-radius:12px;">
+                    <p style="color:var(--text3)">Formulario de despacho en desarrollo...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- LÓGICA DE NAVEGACIÓN ---
+    function go(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.ni').forEach(n => n.classList.remove('active'));
+        document.getElementById('page-' + id).classList.add('active');
+    }
+
+    // --- LÓGICA DE LOGIN ---
+    function doLogin() {
+        const u = document.getElementById('l-user').value;
+        if(u) {
+            document.getElementById('login').style.display = 'none';
+            document.getElementById('app').style.display = 'block';
+            document.getElementById('top-user').textContent = u.toUpperCase();
+        }
+    }
+
+    // --- CONTROLADOR DE CARGA (ELIMINA EL BLOQUEO) ---
+    window.onload = function() {
+        console.log("Sistema listo");
+        setTimeout(function() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('login').style.display = 'flex';
+        }, 2000); // Forzar apertura a los 2 segundos
+    };
+</script>
+
+</body>
+</html>
