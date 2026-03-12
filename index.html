@@ -1126,7 +1126,7 @@ var u = document.getElementById('l-user').value.trim().toLowerCase();
 var p = document.getElementById('l-pass').value;
 var r = document.getElementById('l-role').value;
 var err = document.getElementById('lerr');
-if(!USERS[u]||USERS[u].pass!==p||(r&&USERS[u].role!==r)){
+if(!USERS[u]||USERS[u].pass!==p){
 err.style.display='block'; return;
 }
 CU = {name:u, role:USERS[u].role, label:USERS[u].label};
