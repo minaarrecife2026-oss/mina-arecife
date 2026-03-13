@@ -258,6 +258,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 #toast.show{opacity:1;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 </head>
 <body>
 
@@ -2363,7 +2364,7 @@ function guardarEditarVenta(){
     cerrarEditarVenta();
     renderMovs();
     renderCartera();
-    renderDashboard();
+    renderDash();
     // Log de actividad
     var logEntry = { usuario:CU.user, rol:CU.role, tipo:'EDICION', fecha:today(),
       hora: (function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x}; return p(n.getHours())+':'+p(n.getMinutes()); })(),
@@ -2383,251 +2384,217 @@ window.guardarEditarVenta= guardarEditarVenta;
 // ======================================================
 // EXPORTAR EXCEL / PDF
 // ======================================================
-function exportToCSV(rows, headers, filename){
-  var sep = ';';
-  var csv = [headers.join(sep)];
-  rows.forEach(function(r){
-    csv.push(r.map(function(c){ var s=String(c||'').replace(/"/g,'""'); return '"'+s+'"'; }).join(sep));
-  });
-  var blob = new Blob(['\uFEFF'+csv.join('\r\n')],{type:'text/csv;charset=utf-8;'});
-  var url  = URL.createObjectURL(blob);
-  var a    = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-function exportCarteraExcel(){
-  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
-  var headers = ['Fecha','Remision','Cliente','CC/NIT','Material','Cantidad','Total','Pagado','Saldo','F.Pago','Estado'];
-  var rows = ventas.map(function(v){
-    var mat=getMat(v.matId); var pagado=v.totalPagado||0;
-    return [v.fecha,v.remision,v.clienteNombre,v.cedula||'',mat?mat.nombre:v.matId,v.cant,v.total,pagado,v.total-pagado,v.fpago,v.estado||''];
-  });
-  exportToCSV(rows,headers,'Cartera_'+today()+'.csv');
-  showToast('✅ Excel descargado');
-}
-function exportVentasExcel(){
-  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
-  var headers = ['Fecha','Hora','Remision','Cliente','CC/NIT','Obra','Placa','Destino','Material','Cantidad','Precio','Subtotal','IVA','Total','F.Pago','Estado'];
-  var rows = ventas.map(function(v){
-    var mat=getMat(v.matId); var sub=v.cant*v.precio;
-    return [v.fecha,v.hora,v.remision,v.clienteNombre,v.cedula||'',v.obra||'',v.placa||'',v.destino||'',mat?mat.nombre:v.matId,v.cant,v.precio,sub,v.iva||0,v.total,v.fpago,v.estado||''];
-  });
-  exportToCSV(rows,headers,'Ventas_'+today()+'.csv');
-  showToast('✅ Excel descargado');
-}
-function exportConsultaExcel(){
-  if(!_consultaResultados.length){ showToast('No hay resultados para exportar'); return; }
-  var headers = ['Fecha','Remision','Cliente','CC/NIT','Material','Cantidad','Total','F.Pago','Estado'];
-  var rows = _consultaResultados.map(function(v){
-    var mat=getMat(v.matId);
-    return [v.fecha,v.remision,v.clienteNombre,v.cedula||'',mat?mat.nombre:v.matId,v.cant,v.total,v.fpago,v.estado||''];
-  });
-  exportToCSV(rows,headers,'Consulta_'+today()+'.csv');
-  showToast('✅ Excel descargado');
-}
-function exportCarteraPDF(){
-  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
-  var totalPend = ventas.filter(function(v){ return v.estado==='Pendiente'||v.estado==='Parcial'; }).reduce(function(a,b){ return a+(b.total-(b.totalPagado||0)); },0);
-  var filas = ventas.map(function(v){
-    var mat=getMat(v.matId); var saldo=v.total-(v.totalPagado||0);
-    return '<tr><td>'+v.fecha+'</td><td>'+v.remision+'</td><td>'+v.clienteNombre+'</td><td>'+(v.cedula||'')+'</td>'+
-      '<td>'+(mat?mat.nombre:v.matId)+'</td><td style="text-align:right">'+fmt(v.total)+'</td>'+
-      '<td style="text-align:right;color:'+(saldo>0?'#c00':'#080')+'">'+fmt(saldo)+'</td>'+
-      '<td>'+v.fpago+'</td><td>'+(v.estado||'')+'</td></tr>';
-  }).join('');
-  abrirPDF('<h1>BROUS INVESTMENTS SAS — INFORME DE CARTERA</h1><div class="sub">NIT: 901.471.724-2 | Fecha: '+today()+'</div>'+
-    '<table><thead><tr><th>Fecha</th><th>Remisión</th><th>Cliente</th><th>CC/NIT</th><th>Material</th><th>Total</th><th>Saldo</th><th>F.Pago</th><th>Estado</th></tr></thead><tbody>'+filas+'</tbody></table>'+
-    '<div style="text-align:right;font-weight:700;margin-top:8px;">TOTAL PENDIENTE: '+fmt(totalPend)+'</div>');
-}
-function exportVentasPDF(){
-  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
-  var totalVentas = ventas.reduce(function(a,b){ return a+b.total; },0);
-  var filas = ventas.map(function(v){
-    var mat=getMat(v.matId);
-    return '<tr><td>'+v.fecha+'</td><td>'+v.remision+'</td><td>'+v.clienteNombre+'</td>'+
-      '<td>'+(mat?mat.nombre:v.matId)+'</td><td style="text-align:center">'+v.cant+'</td>'+
-      '<td style="text-align:right">'+fmt(v.precio)+'</td><td style="text-align:right">'+fmt(v.iva||0)+'</td>'+
-      '<td style="text-align:right;font-weight:700">'+fmt(v.total)+'</td>'+
-      '<td>'+v.fpago+'</td><td>'+(v.estado||'')+'</td></tr>';
-  }).join('');
-  abrirPDF('<h1>BROUS INVESTMENTS SAS — INFORME DE VENTAS</h1><div class="sub">NIT: 901.471.724-2 | Fecha: '+today()+'</div>'+
-    '<table><thead><tr><th>Fecha</th><th>Remisión</th><th>Cliente</th><th>Material</th><th>Cant</th><th>Precio</th><th>IVA</th><th>Total</th><th>F.Pago</th><th>Estado</th></tr></thead><tbody>'+filas+'</tbody></table>'+
-    '<div style="text-align:right;font-weight:700;margin-top:8px;">TOTAL VENTAS: '+fmt(totalVentas)+'</div>');
-}
-function exportConsultaPDF(){
-  if(!_consultaResultados.length){ showToast('No hay resultados para exportar'); return; }
-  var total = _consultaResultados.reduce(function(a,b){ return a+b.total; },0);
-  var filas = _consultaResultados.map(function(v){
-    var mat=getMat(v.matId);
-    return '<tr><td>'+v.fecha+'</td><td>'+v.remision+'</td><td>'+v.clienteNombre+'</td><td>'+(v.cedula||'')+'</td>'+
-      '<td>'+(mat?mat.nombre:v.matId)+'</td><td style="text-align:center">'+v.cant+'</td>'+
-      '<td style="text-align:right;font-weight:700">'+fmt(v.total)+'</td>'+
-      '<td>'+v.fpago+'</td><td>'+(v.estado||'')+'</td></tr>';
-  }).join('');
-  abrirPDF('<h1>BROUS INVESTMENTS SAS — CONSULTA DE REMISIONES</h1><div class="sub">NIT: 901.471.724-2 | Fecha: '+today()+' | '+_consultaResultados.length+' registros</div>'+
-    '<table><thead><tr><th>Fecha</th><th>Remisión</th><th>Cliente</th><th>CC/NIT</th><th>Material</th><th>Cant</th><th>Total</th><th>F.Pago</th><th>Estado</th></tr></thead><tbody>'+filas+'</tbody></table>'+
-    '<div style="text-align:right;font-weight:700;margin-top:8px;">TOTAL: '+fmt(total)+'</div>');
-}
-function abrirPDF(contenido){
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'+
-    'body{font-family:Arial;font-size:10px;margin:15mm;}h1{font-size:16px;text-align:center;margin-bottom:4px;}'+
-    '.sub{text-align:center;font-size:11px;color:#666;margin-bottom:12px;}'+
-    'table{width:100%;border-collapse:collapse;margin-top:12px;}'+
-    'th{background:#222;color:#fff;padding:5px;text-align:left;font-size:10px;}'+
-    'td{padding:4px 5px;border-bottom:1px solid #eee;font-size:10px;}'+
-    'tr:nth-child(even){background:#f9f9f9;}'+
-    '@media print{.no-print{display:none}}'+
-    '</style></head><body>'+contenido+
-    '<div class="no-print" style="text-align:center;margin-top:20px;">'+
-      '<button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:10px 24px;font-size:13px;border-radius:6px;cursor:pointer;">🖨 Imprimir / Guardar PDF</button>'+
-    '</div></body></html>';
-  var win = window.open('','_blank','width=900,height=700');
-  win.document.write(html);
-  win.document.close();
-}
-
 // ======================================================
-// BÚSQUEDA POR CLIENTE
+// EXPORTAR EXCEL PROFESIONAL (HTML→XLS con estilos)
 // ======================================================
-var _bcResultados = [];
+// ======================================================
+// EXPORTAR EXCEL PROFESIONAL — ExcelJS (.xlsx real)
+// ======================================================
+var COLS_MONEY = ['Precio','Subtotal','IVA','Total','Pagado','Saldo','Total Pagado','Total Vendido','Saldo Debe'];
+var ESTADO_XL = {
+  'Pagado':      {bg:'DCFCE7',fg:'16A34A'},
+  'Pendiente':   {bg:'FEE2E2',fg:'DC2626'},
+  'Parcial':     {bg:'FEF3C7',fg:'D97706'},
+};
+var FPAGO_XL = {
+  'Efectivo':     {bg:'DCFCE7',fg:'16A34A'},
+  'Credito':      {bg:'DBEAFE',fg:'2563EB'},
+  'Transferencia':{bg:'FEF3C7',fg:'D97706'},
+  'Donacion':     {bg:'F3E8FF',fg:'7C3AED'},
+};
+function xlB(c){ var s={style:'thin',color:{argb:'FF'+(c||'CBD5E1')}};
+  return {top:s,left:s,bottom:s,right:s}; }
+function xlF(h){ return {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+h}}; }
+function xlFont(o){ return {name:'Arial',size:o.size||10,bold:!!o.bold,color:{argb:'FF'+(o.color||'000000')}}; }
+function xlAlign(h,v,w){ return {horizontal:h||'left',vertical:v||'middle',wrapText:!!w}; }
 
-function initBusquedaCliente(){
-  var sel = document.getElementById('bc-cliente');
-  if(!sel) return;
-  sel.innerHTML = '<option value="">— Selecciona un cliente —</option>';
-  // Agregar clientes registrados
-  clientes.forEach(function(c){
-    var op = document.createElement('option');
-    op.value = c.nombre;
-    op.textContent = c.nombre + (c.nit?' — '+c.nit:'');
-    sel.appendChild(op);
-  });
-  // Agregar nombres que aparecen en movimientos pero no están en clientes
-  var nombresExtra = [...new Set(movimientos
-    .filter(function(m){ return m.tipo==='VENTA'; })
-    .map(function(m){ return m.clienteNombre; })
-  )].filter(function(n){
-    return !clientes.find(function(c){ return c.nombre===n; });
-  });
-  nombresExtra.forEach(function(n){
-    var op = document.createElement('option');
-    op.value = n;
-    op.textContent = n + ' (sin ficha)';
-    sel.appendChild(op);
+function addEncabezado(ws,nc,sub){
+  ws.mergeCells(1,1,1,nc);
+  var c1=ws.getRow(1).getCell(1); ws.getRow(1).height=32;
+  c1.value='MINA ARRECIFE — BROUS INVESTMENTS SAS';
+  c1.font=xlFont({bold:true,color:'F5A623',size:16});
+  c1.fill=xlF('0B0F1A'); c1.alignment=xlAlign('center');
+
+  ws.mergeCells(2,1,2,nc);
+  var c2=ws.getRow(2).getCell(1); ws.getRow(2).height=16;
+  c2.value='NIT: 901.471.724-2  |  VEREDA PTO TEMBLEQUE  |  Tel: 3214528140  |  ARENA & GRAVILLA';
+  c2.font=xlFont({color:'F5A623',size:9}); c2.fill=xlF('1E293B'); c2.alignment=xlAlign('center');
+
+  ws.mergeCells(3,1,3,nc); ws.getRow(3).height=5;
+  ws.getRow(3).getCell(1).fill=xlF('F5A623');
+
+  ws.mergeCells(4,1,4,nc); ws.getRow(4).height=22;
+  var c4=ws.getRow(4).getCell(1);
+  c4.value=sub+'  —  Generado: '+today();
+  c4.font=xlFont({bold:true,color:'0B0F1A',size:12});
+  c4.fill=xlF('FDE68A'); c4.alignment=xlAlign('center');
+  ws.getRow(5).height=6;
+}
+
+function addHeaders(ws,row,headers,widths){
+  var r=ws.getRow(row); r.height=22;
+  headers.forEach(function(h,i){
+    var c=r.getCell(i+1);
+    c.value=h; c.font=xlFont({bold:true,color:'FFFFFF',size:10});
+    c.fill=xlF('1E293B'); c.alignment=xlAlign('center','middle'); c.border=xlB();
+    if(widths&&widths[i]) ws.getColumn(i+1).width=widths[i];
   });
 }
 
-function runBusquedaCliente(){
-  var clienteSel  = (document.getElementById('bc-cliente').value||'').trim().toLowerCase();
-  var clienteNom  = (document.getElementById('bc-nombre').value||'').trim().toLowerCase();
-  var desde       = document.getElementById('bc-desde').value;
-  var hasta       = document.getElementById('bc-hasta').value;
-  var estado      = document.getElementById('bc-estado').value;
+function addDataRow(ws,rowNum,values,headers){
+  var r=ws.getRow(rowNum); r.height=18;
+  var bg=rowNum%2===0?'F1F5F9':'F8FAFC';
+  values.forEach(function(v,i){
+    var c=r.getCell(i+1); var h=headers[i]||'';
+    var est=ESTADO_XL[v]; var fp=FPAGO_XL[v];
+    if(est){
+      c.value=v; c.font=xlFont({bold:true,color:est.fg,size:9});
+      c.fill=xlF(est.bg); c.alignment=xlAlign('center','middle');
+    } else if(fp){
+      c.value=v; c.font=xlFont({color:fp.fg,size:9});
+      c.fill=xlF(fp.bg); c.alignment=xlAlign('center','middle');
+    } else if(COLS_MONEY.indexOf(h)>=0){
+      c.value=typeof v==='number'?v:(parseFloat(v)||0);
+      c.numFmt='"$"#,##0'; c.font=xlFont({bold:h==='Total'});
+      c.fill=xlF(bg); c.alignment=xlAlign('right','middle');
+    } else {
+      c.value=v||''; c.font=xlFont({size:10});
+      c.fill=xlF(bg);
+      c.alignment=xlAlign(typeof v==='number'?'center':'left','middle');
+    }
+    c.border=xlB();
+  });
+}
 
-  // Necesita al menos un filtro de cliente
-  var filtroCliente = clienteSel || clienteNom;
-  if(!filtroCliente){
-    document.getElementById('tbl-bc').innerHTML = '<tr class="empty-row"><td colspan="11">Selecciona o escribe un cliente para buscar</td></tr>';
-    document.getElementById('bc-kgrid').style.display = 'none';
-    document.getElementById('bc-totales').style.display = 'none';
-    document.getElementById('bc-count').textContent = '';
+function addTotalRow(ws,rowNum,values,headers,label){
+  var r=ws.getRow(rowNum); r.height=22;
+  values.forEach(function(v,i){
+    var c=r.getCell(i+1); var h=headers[i]||'';
+    c.fill=xlF('1E293B'); c.border=xlB('F5A623');
+    if(i===0){
+      c.value=label||''; c.font=xlFont({bold:true,color:'F5A623',size:10});
+      c.alignment=xlAlign('left','middle');
+    } else if(COLS_MONEY.indexOf(h)>=0&&typeof v==='number'){
+      c.value=v; c.numFmt='"$"#,##0';
+      c.font=xlFont({bold:true,color:'F5A623',size:10});
+      c.alignment=xlAlign('right','middle');
+    } else {
+      c.value=v||''; c.font=xlFont({bold:true,color:'CCCCCC',size:10});
+      c.alignment=xlAlign('center','middle');
+    }
+  });
+}
+
+async function generarExcelCompleto(tipo){
+  if(typeof ExcelJS==='undefined'){
+    showToast('⏳ Cargando Excel... intenta de nuevo en 2 segundos');
     return;
   }
+  showToast('⏳ Generando Excel...');
+  var wb=new ExcelJS.Workbook();
+  wb.creator='Mina Arrecife'; wb.created=new Date();
+  var ventas=movimientos.filter(function(m){ return m.tipo==='VENTA'; });
 
-  _bcResultados = movimientos.filter(function(m){
-    if(m.tipo !== 'VENTA') return false;
-    var nombre = (m.clienteNombre||'').toLowerCase();
-    if(clienteSel  && nombre !== clienteSel)  return false;
-    if(!clienteSel && clienteNom && !nombre.includes(clienteNom)) return false;
-    if(desde && m.fecha < desde) return false;
-    if(hasta && m.fecha > hasta) return false;
-    if(estado && m.estado !== estado) return false;
-    return true;
+  // ── HOJA REMISIONES ──────────────────────────────
+  var ws1=wb.addWorksheet('Remisiones');
+  ws1.views=[{showGridLines:false}];
+  var h1=['Fecha','Hora','Remisión','Cliente','CC/NIT','Obra','Placa','Destino','Material','Cantidad','Precio','Subtotal','IVA','Total','F. Pago','Estado'];
+  var w1=[12,8,13,24,14,16,10,14,18,10,13,13,12,13,13,11];
+  addEncabezado(ws1,h1.length,'REPORTE DE REMISIONES');
+  addHeaders(ws1,6,h1,w1);
+  ventas.forEach(function(v,i){
+    var mat=getMat(v.matId); var sub=v.cant*v.precio;
+    addDataRow(ws1,7+i,[v.fecha,v.hora||'',v.remision,v.clienteNombre,v.cedula||'',
+      v.obra||'',v.placa||'',v.destino||'',mat?mat.nombre:v.matId,
+      v.cant,v.precio,sub,v.iva||0,v.total,v.fpago,v.estado||''],h1);
   });
+  var tr1=7+ventas.length;
+  addTotalRow(ws1,tr1,['','','','','','','','','',
+    ventas.reduce(function(a,b){return a+b.cant;},0),'',
+    ventas.reduce(function(a,b){return a+b.cant*b.precio;},0),
+    ventas.reduce(function(a,b){return a+(b.iva||0);},0),
+    ventas.reduce(function(a,b){return a+b.total;},0),'',''],
+    h1,'TOTAL  ('+ventas.length+' remisiones)');
+  ws1.autoFilter={from:{row:6,column:1},to:{row:6,column:h1.length}};
+  ws1.views[0].state='frozen'; ws1.views[0].ySplit=6;
 
-  // Calcular totales
-  var totalFact   = _bcResultados.reduce(function(a,b){ return a+b.total; },0);
-  var totalPagado = _bcResultados.reduce(function(a,b){ return a+(b.totalPagado||0); },0);
-  var totalSaldo  = totalFact - totalPagado;
-  var nPend       = _bcResultados.filter(function(v){ return v.estado==='Pendiente'||v.estado==='Parcial'; }).length;
+  // ── HOJA CARTERA ──────────────────────────────
+  var ws2=wb.addWorksheet('Cartera');
+  ws2.views=[{showGridLines:false}];
+  var h2=['Fecha','Remisión','Cliente','CC/NIT','Material','Cantidad','Total','Pagado','Saldo','F. Pago','Estado'];
+  var w2=[12,13,24,14,18,10,13,13,13,13,11];
+  addEncabezado(ws2,h2.length,'ESTADO DE CARTERA');
+  addHeaders(ws2,6,h2,w2);
+  ventas.forEach(function(v,i){
+    var mat=getMat(v.matId); var pagado=v.totalPagado||0;
+    addDataRow(ws2,7+i,[v.fecha,v.remision,v.clienteNombre,v.cedula||'',
+      mat?mat.nombre:v.matId,v.cant,v.total,pagado,v.total-pagado,v.fpago,v.estado||''],h2);
+  });
+  var tr2=7+ventas.length;
+  addTotalRow(ws2,tr2,['','','','','',
+    ventas.reduce(function(a,b){return a+b.cant;},0),
+    ventas.reduce(function(a,b){return a+b.total;},0),
+    ventas.reduce(function(a,b){return a+(b.totalPagado||0);},0),
+    ventas.reduce(function(a,b){return a+(b.total-(b.totalPagado||0));},0),'',''],
+    h2,'TOTALES  ('+ventas.length+' remisiones)');
+  ws2.autoFilter={from:{row:6,column:1},to:{row:6,column:h2.length}};
+  ws2.views[0].state='frozen'; ws2.views[0].ySplit=6;
 
-  // KPIs
-  document.getElementById('bc-kgrid').style.display = 'grid';
-  document.getElementById('bc-kgrid').innerHTML =
-    kpi('Remisiones',     _bcResultados.length, 'en el período',  'ck-blue')+
-    kpi('Total Facturado', fmt(totalFact),       'acumulado',      'ck-gold')+
-    kpi('Total Pagado',    fmt(totalPagado),     'cobrado',        'ck-green')+
-    kpi('Saldo Pendiente', fmt(totalSaldo),      'por cobrar',     'ck-red')+
-    kpi('Facturas Vencidas',nPend,               'sin saldar',     'ck-amber');
+  // ── HOJA CLIENTE (si aplica) ──────────────────
+  if(tipo==='cliente'&&_bcResultados.length){
+    var ws3=wb.addWorksheet('Busqueda Cliente');
+    ws3.views=[{showGridLines:false}];
+    var cliNom=(document.getElementById('bc-cliente').value||document.getElementById('bc-nombre').value||'Cliente').toUpperCase();
+    var desde=document.getElementById('bc-desde').value||'inicio';
+    var hasta=document.getElementById('bc-hasta').value||'hoy';
+    var h3=['Fecha','Remisión','Cliente','CC/NIT','Material','Cantidad','Precio','Subtotal','IVA','Total','F. Pago','Estado','Pagado','Saldo','Obra','Placa','Destino'];
+    var w3=[12,13,24,14,18,10,13,13,12,13,13,11,13,13,16,10,14];
+    addEncabezado(ws3,h3.length,'ESTADO DE CUENTA — '+cliNom+' | '+desde+' → '+hasta);
+    addHeaders(ws3,6,h3,w3);
+    _bcResultados.forEach(function(v,i){
+      var mat=getMat(v.matId); var sub=v.cant*v.precio; var saldo=v.total-(v.totalPagado||0);
+      addDataRow(ws3,7+i,[v.fecha,v.remision,v.clienteNombre,v.cedula||'',
+        mat?mat.nombre:v.matId,v.cant,v.precio,sub,v.iva||0,v.total,
+        v.fpago,v.estado||'',v.totalPagado||0,saldo,v.obra||'',v.placa||'',v.destino||''],h3);
+    });
+    var tr3=7+_bcResultados.length;
+    addTotalRow(ws3,tr3,['','','','','',
+      _bcResultados.reduce(function(a,b){return a+b.cant;},0),'',
+      _bcResultados.reduce(function(a,b){return a+b.cant*b.precio;},0),
+      _bcResultados.reduce(function(a,b){return a+(b.iva||0);},0),
+      _bcResultados.reduce(function(a,b){return a+b.total;},0),
+      '','',
+      _bcResultados.reduce(function(a,b){return a+(b.totalPagado||0);},0),
+      _bcResultados.reduce(function(a,b){return a+(b.total-(b.totalPagado||0));},0),
+      '','',''],
+      h3,'TOTAL  ('+_bcResultados.length+' remisiones)');
+    ws3.autoFilter={from:{row:6,column:1},to:{row:6,column:h3.length}};
+    ws3.views[0].state='frozen'; ws3.views[0].ySplit=6;
+  }
 
-  // Contador
-  document.getElementById('bc-count').textContent = _bcResultados.length + ' remisión(es) encontrada(s)';
-
-  // Tabla
-  document.getElementById('tbl-bc').innerHTML = _bcResultados.length ? _bcResultados.map(function(v){
-    var mat   = getMat(v.matId);
-    var saldo = v.total - (v.totalPagado||0);
-    var rid   = v._id||v.id;
-    return '<tr>'+
-      '<td>'+v.fecha+'</td>'+
-      '<td style="color:var(--accent);font-weight:600;">'+v.remision+'</td>'+
-      '<td>'+(mat?mat.nombre:v.matId)+'</td>'+
-      '<td style="text-align:center">'+fmtN(v.cant)+'</td>'+
-      '<td>'+fmt(v.precio)+'</td>'+
-      '<td>'+(v.iva>0?fmt(v.iva):'—')+'</td>'+
-      '<td style="font-weight:700;color:var(--gold)">'+fmt(v.total)+'</td>'+
-      '<td><span class="badge '+fpClass(v.fpago)+'">'+v.fpago+'</span></td>'+
-      '<td>'+estadoBadge(v.estado)+'</td>'+
-      '<td style="font-weight:600;color:'+(saldo>0?'var(--red)':'var(--green)')+'">'+
-        (saldo>0?fmt(saldo):'✅ Al día')+
-      '</td>'+
-      '<td><button onclick="printRemision(\''+rid+'\')" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer;">🖨</button></td>'+
-    '</tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="11">No se encontraron remisiones para este cliente</td></tr>';
-
-  // Totales pie
-  document.getElementById('bc-totales').style.display  = _bcResultados.length ? 'block' : 'none';
-  document.getElementById('bc-t-count').textContent    = _bcResultados.length;
-  document.getElementById('bc-t-total').textContent    = fmt(totalFact);
-  document.getElementById('bc-t-pagado').textContent   = fmt(totalPagado);
-  document.getElementById('bc-t-saldo').textContent    = fmt(totalSaldo);
+  var buf=await wb.xlsx.writeBuffer();
+  var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  var cliN=document.getElementById('bc-cliente')?document.getElementById('bc-cliente').value||document.getElementById('bc-nombre').value||'X':'X';
+  var fname=tipo==='cliente'
+    ?'Cliente_'+cliN.replace(/\s/g,'_')+'_'+today()+'.xlsx'
+    :'MinaArrecife_'+tipo+'_'+today()+'.xlsx';
+  a.href=url; a.download=fname; a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ Excel descargado: '+fname);
 }
 
-function limpiarBusquedaCliente(){
-  document.getElementById('bc-cliente').value = '';
-  document.getElementById('bc-nombre').value  = '';
-  document.getElementById('bc-desde').value   = '';
-  document.getElementById('bc-hasta').value   = '';
-  document.getElementById('bc-estado').value  = '';
-  _bcResultados = [];
-  document.getElementById('tbl-bc').innerHTML = '<tr class="empty-row"><td colspan="11">Selecciona o escribe un cliente para buscar</td></tr>';
-  document.getElementById('bc-kgrid').style.display   = 'none';
-  document.getElementById('bc-totales').style.display = 'none';
-  document.getElementById('bc-count').textContent     = '';
-}
-
-function exportBCExcel(){
-  if(!_bcResultados.length){ showToast('No hay resultados para exportar'); return; }
-  var clienteNombre = document.getElementById('bc-cliente').value ||
-                      document.getElementById('bc-nombre').value  || 'Cliente';
-  var headers = ['Fecha','Remisión','Cliente','CC/NIT','Material','Cantidad','Precio','Subtotal','IVA','Total','F.Pago','Estado','Pagado','Saldo','Obra','Placa','Destino'];
-  var rows = _bcResultados.map(function(v){
-    var mat   = getMat(v.matId);
-    var sub   = v.cant * v.precio;
-    var saldo = v.total - (v.totalPagado||0);
-    return [
-      v.fecha, v.remision, v.clienteNombre, v.cedula||'',
-      mat?mat.nombre:v.matId, v.cant, v.precio, sub, v.iva||0, v.total,
-      v.fpago, v.estado||'', v.totalPagado||0, saldo,
-      v.obra||'', v.placa||'', v.destino||''
-    ];
-  });
-  // Agregar fila de totales al final
-  var totalFact   = _bcResultados.reduce(function(a,b){ return a+b.total; },0);
-  var totalPagado = _bcResultados.reduce(function(a,b){ return a+(b.totalPagado||0); },0);
-  rows.push(['','','','','','','','','','TOTAL','','',totalPagado,totalFact-totalPagado,'','','']);
-  exportToCSV(rows, headers, 'Cliente_'+clienteNombre.replace(/\s/g,'_')+'_'+today()+'.csv');
-  showToast('✅ Excel descargado: ' + _bcResultados.length + ' remisiones');
+function exportCarteraExcel()  { generarExcelCompleto('Cartera');    }
+function exportVentasExcel()   { generarExcelCompleto('Remisiones'); }
+function exportConsultaExcel() { generarExcelCompleto('Remisiones'); }
+function exportBCExcel()       { generarExcelCompleto('cliente');    }
+function exportToCSV(rows,headers,filename){
+  var sep=';'; var csv=[headers.join(sep)];
+  rows.forEach(function(r){ csv.push(r.map(function(c){ var s=String(c||'').replace(/"/g,'""'); return '"'+s+'"'; }).join(sep)); });
+  var blob=new Blob(['\uFEFF'+csv.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob); var a=document.createElement('a');
+  a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
 }
 
 function exportBCPDF(){
