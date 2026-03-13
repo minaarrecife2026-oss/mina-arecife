@@ -325,7 +325,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <div class="ni admin-only" onclick="go('actividad')"><span class="ni-icon">👁</span><span>Actividad</span></div>
 <div class="ni admin-only" onclick="go('notificaciones')"><span class="ni-icon">📲</span><span>Notif. Deuda</span></div>
 <div class="ni admin-only" onclick="go('historial')"><span class="ni-icon">📜</span><span>Historial</span></div>
-<div class="ni admin-only" onclick="go('clientes')"><span class="ni-icon">👥</span><span>Clientes</span></div>
+<div class="ni adm-secre" onclick="go('clientes')"><span class="ni-icon">👥</span><span>Clientes</span></div>
 <div class="ni admin-only" onclick="go('materiales')"><span class="ni-icon">🪨</span><span>Materiales</span></div>
 </div>
 <!-- MAIN -->
@@ -2356,10 +2356,14 @@ window.clearVenta = clearVenta;
 // CLIENTES
 // ======================================================
 function renderClientes(){
-  var ok = CU.role==='admin';
-  document.getElementById('lock-clientes').style.display   = ok?'none':'block';
-  document.getElementById('section-clientes').style.display= ok?'block':'none';
-  if(!ok) return;
+  var isAdmin = CU.role==='admin';
+  var canView = CU.role==='admin' || CU.role==='secretaria';
+  document.getElementById('lock-clientes').style.display   = canView?'none':'block';
+  document.getElementById('section-clientes').style.display= canView?'block':'none';
+  if(!canView) return;
+  // Formulario para admin y secretaria
+  var formEl = document.querySelector('#section-clientes .fwrap');
+  if(formEl) formEl.style.display = canView ? '' : 'none';
   var q = cliFilter.toLowerCase();
   var data = clientes.filter(function(c){ return !q||c.nombre.toLowerCase().includes(q)||(c.nit||'').includes(q); });
   document.getElementById('tbl-clientes').innerHTML = data.map(function(c){
@@ -2367,7 +2371,8 @@ function renderClientes(){
     return '<tr><td><span class="badge b-grey">'+(c.id||'—')+'</span></td><td><b>'+c.nombre+'</b></td>'+
       '<td>'+(c.nit||'')+'</td><td>'+(c.tel||'')+'</td><td>'+(c.email||'—')+'</td>'+
       '<td><button onclick="generarCertificado(\''+c.nombre+'\')" style="background:#7C3AED;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">📜 Certificado</button></td>'+
-      '<td><button class="btn btn-danger btn-sm" onclick="delCliente(\''+cid+'\')">Eliminar</button></td></tr>';
+      (isAdmin?'<td><button class="btn btn-danger btn-sm" onclick="delCliente(\''+cid+'\')">Eliminar</button></td>':'<td>—</td>')+
+    '</tr>';
   }).join('') || '<tr class="empty-row"><td colspan="7">Sin clientes</td></tr>';
 }
 function filterClientes(v){ cliFilter=v; renderClientes(); }
