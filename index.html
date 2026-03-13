@@ -1679,7 +1679,7 @@ function renderCartera(){
       '<div class="ccard-row"><span class="ccard-lbl">Facturas pendientes</span><span class="ccard-val">'+nPend+'</span></div>'+
       '<div class="ccard-saldo '+(saldo<=0?'ccard-ok':'')+'">'+(saldo<=0?'✅ AL DÍA':fmt(saldo)+' DEBE')+'</div></div>';
   }).join('');
-  var pends = ventas.filter(function(v){ return v.estado==='Pendiente'||v.estado==='Parcial'; }).reverse();
+  var pends = ventas.filter(function(v){ return (v.total-(v.totalPagado||0)) > 0; }).reverse();
   document.getElementById('tbl-cartera').innerHTML = pends.length ? pends.map(function(v){
     var mat = getMat(v.matId);
     var saldo = v.total - (v.totalPagado||0);
