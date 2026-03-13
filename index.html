@@ -390,13 +390,38 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <div class="page" id="page-cartera">
 <div class="ptitle">Cartera</div>
 <div class="psub">Estado de cuentas por cobrar a clientes</div>
-<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-<button onclick="exportCarteraExcel()" style="background:var(--green);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📊 Descargar Excel</button>
-<button onclick="abrirPagoCliente()" style="background:var(--purple);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">👤 Pago por Cliente</button>
-<button onclick="exportCarteraPDF()" style="background:var(--accent);color:#000;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📄 Descargar PDF</button>
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+  <button onclick="exportCarteraExcel()" style="background:var(--green);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📊 Descargar Excel</button>
+  <button onclick="abrirPagoCliente()" style="background:var(--purple);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">👤 Pago por Cliente</button>
+  <button onclick="exportCarteraPDF()" style="background:var(--accent);color:#000;border:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">📄 Descargar PDF</button>
 </div>
 <div class="kgrid" id="kgrid-cartera"></div>
+
+<!-- Barra de búsqueda + ordenar + filtro -->
+<div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;background:var(--surface2);padding:12px 16px;border-radius:12px;">
+  <div style="position:relative;flex:1;min-width:200px;">
+    <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;">🔍</span>
+    <input id="cartera-search" type="text" placeholder="Buscar cliente..." oninput="filtrarCartera()"
+      style="width:100%;padding:8px 12px 8px 32px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text1);font-size:13px;box-sizing:border-box;">
+  </div>
+  <select id="cartera-orden" onchange="filtrarCartera()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text1);font-size:13px;cursor:pointer;">
+    <option value="deuda">↓ Mayor deuda primero</option>
+    <option value="nombre">A-Z Nombre</option>
+    <option value="ventas">↓ Más compras</option>
+  </select>
+  <select id="cartera-filtro" onchange="filtrarCartera()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text1);font-size:13px;cursor:pointer;">
+    <option value="todos">Todos los clientes</option>
+    <option value="debe">Solo con deuda</option>
+    <option value="aldia">Solo al día</option>
+  </select>
+  <span id="cartera-conteo" style="font-size:12px;color:var(--text3);white-space:nowrap;"></span>
+</div>
+
 <div class="cartera-grid" id="cartera-cards"></div>
+
+<!-- Paginación -->
+<div id="cartera-paginacion" style="display:flex;gap:8px;justify-content:center;align-items:center;margin:16px 0;flex-wrap:wrap;"></div>
+
 <div class="twrap">
 <div class="thead2"><div class="ttitle">⏳ Deudas Pendientes</div></div>
 <div class="tscroll"><table><thead><tr>
@@ -813,7 +838,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <div class="twrap">
 <div class="thead2"><div class="ttitle">Clientes Registrados</div></div>
 <div class="tscroll"><table><thead><tr>
-<th>ID</th><th>Nombre</th><th>NIT</th><th>Teléfono</th><th>Email</th><th>Acción</th>
+<th>ID</th><th>Nombre</th><th>NIT</th><th>Teléfono</th><th>Email</th><th>Certificado</th><th>Acción</th>
 </tr></thead><tbody id="tbl-clientes"></tbody></table></div>
 </div>
 </div>
@@ -1656,33 +1681,43 @@ window.filterHistorial = filterHistorial;
 // ======================================================
 // CARTERA
 // ======================================================
+var _carteraDatos = [];   // todos los clientes calculados
+var _carteraFiltrada = []; // tras búsqueda/filtro
+var _carteraPagina = 1;
+var CARTERA_POR_PAG = 20;
+
 function renderCartera(){
   var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
-  var totalPend  = ventas.filter(function(v){ return v.estado==='Pendiente'; }).reduce(function(a,b){ return a+(b.total-(b.totalPagado||0)); },0);
-  var totalVend  = ventas.reduce(function(a,b){ return a+b.total; },0);
-  var clisPend   = [...new Set(ventas.filter(function(v){ return v.estado==='Pendiente'; }).map(function(v){ return v.clienteNombre; }))].length;
+  var totalPend = ventas.reduce(function(a,b){ return a+(b.total-(b.totalPagado||0)); },0);
+  var totalVend = ventas.reduce(function(a,b){ return a+b.total; },0);
+  var allNames  = [...new Set(ventas.map(function(v){ return v.clienteNombre; }))];
+  var clisPend  = allNames.filter(function(n){
+    return ventas.filter(function(v){ return v.clienteNombre===n; })
+      .some(function(v){ return (v.total-(v.totalPagado||0))>0; });
+  }).length;
+
   document.getElementById('kgrid-cartera').innerHTML =
-    kpi('Cartera Total',    fmt(totalPend), 'pendiente por cobrar','ck-red')+
-    kpi('Total Vendido',    fmt(totalVend), 'acumulado',           'ck-gold')+
-    kpi('Clientes con Deuda',clisPend,      'clientes',            'ck-amber');
-  var allNames = [...new Set(ventas.map(function(v){ return v.clienteNombre; }))];
-  document.getElementById('cartera-cards').innerHTML = allNames.map(function(nombre){
+    kpi('Cartera Total',     fmt(totalPend), 'pendiente por cobrar', 'ck-red')+
+    kpi('Total Vendido',     fmt(totalVend), 'acumulado',            'ck-gold')+
+    kpi('Clientes con Deuda',clisPend,       'clientes',             'ck-amber');
+
+  // Construir datos por cliente
+  _carteraDatos = allNames.map(function(nombre){
     var cvs    = ventas.filter(function(v){ return v.clienteNombre===nombre; });
     var totalV = cvs.reduce(function(a,b){ return a+b.total; },0);
     var pagado = cvs.reduce(function(a,b){ return a+(b.totalPagado||0); },0);
     var saldo  = totalV - pagado;
-    var nPend  = cvs.filter(function(v){ return v.estado==='Pendiente'; }).length;
-    return '<div class="ccard">'+
-      '<div class="ccard-name">'+nombre+'</div>'+
-      '<div class="ccard-id">'+cvs.length+' venta(s)</div>'+
-      '<div class="ccard-row"><span class="ccard-lbl">Total vendido</span><span class="ccard-val">'+fmt(totalV)+'</span></div>'+
-      '<div class="ccard-row"><span class="ccard-lbl">Total pagado</span><span class="ccard-val" style="color:var(--green)">'+fmt(pagado)+'</span></div>'+
-      '<div class="ccard-row"><span class="ccard-lbl">Facturas pendientes</span><span class="ccard-val">'+nPend+'</span></div>'+
-      '<div class="ccard-saldo '+(saldo<=0?'ccard-ok':'')+'">'+(saldo<=0?'✅ AL DÍA':fmt(saldo)+' DEBE')+'</div></div>';
-  }).join('');
-  var pends = ventas.filter(function(v){ return (v.total-(v.totalPagado||0)) > 0; }).reverse();
+    var nPend  = cvs.filter(function(v){ return (v.total-(v.totalPagado||0))>0; }).length;
+    return {nombre:nombre, cvs:cvs, totalV:totalV, pagado:pagado, saldo:saldo, nPend:nPend};
+  });
+
+  _carteraPagina = 1;
+  filtrarCartera();
+
+  // Tabla deudas pendientes
+  var pends = ventas.filter(function(v){ return (v.total-(v.totalPagado||0))>0; }).reverse();
   document.getElementById('tbl-cartera').innerHTML = pends.length ? pends.map(function(v){
-    var mat = getMat(v.matId);
+    var mat   = getMat(v.matId);
     var saldo = v.total - (v.totalPagado||0);
     return '<tr>'+
       '<td>'+v.fecha+'</td>'+
@@ -1699,6 +1734,90 @@ function renderCartera(){
     '</tr>';
   }).join('') : '<tr class="empty-row"><td colspan="8">✅ No hay deudas pendientes</td></tr>';
 }
+
+function filtrarCartera(){
+  var busq   = (document.getElementById('cartera-search')||{value:''}).value.toLowerCase().trim();
+  var orden  = (document.getElementById('cartera-orden')||{value:'deuda'}).value;
+  var filtro = (document.getElementById('cartera-filtro')||{value:'todos'}).value;
+
+  _carteraFiltrada = _carteraDatos.filter(function(d){
+    var passNombre = !busq || d.nombre.toLowerCase().includes(busq);
+    var passEstado = filtro==='todos' || (filtro==='debe' && d.saldo>0) || (filtro==='aldia' && d.saldo<=0);
+    return passNombre && passEstado;
+  });
+
+  // Ordenar
+  _carteraFiltrada.sort(function(a,b){
+    if(orden==='deuda')  return b.saldo - a.saldo;
+    if(orden==='nombre') return a.nombre.localeCompare(b.nombre);
+    if(orden==='ventas') return b.cvs.length - a.cvs.length;
+    return 0;
+  });
+
+  _carteraPagina = Math.max(1, Math.min(_carteraPagina, Math.ceil(_carteraFiltrada.length/CARTERA_POR_PAG)||1));
+  renderCarteraCards();
+}
+
+function renderCarteraCards(){
+  var total = _carteraFiltrada.length;
+  var pages = Math.ceil(total/CARTERA_POR_PAG)||1;
+  var ini   = (_carteraPagina-1)*CARTERA_POR_PAG;
+  var slice = _carteraFiltrada.slice(ini, ini+CARTERA_POR_PAG);
+
+  // Conteo
+  var cont = document.getElementById('cartera-conteo');
+  if(cont) cont.textContent = total+' cliente'+(total!==1?'s':'')+(total>CARTERA_POR_PAG?' — pág '+_carteraPagina+'/'+pages:'');
+
+  // Tarjetas
+  document.getElementById('cartera-cards').innerHTML = slice.length ? slice.map(function(d){
+    return '<div class="ccard">'+
+      '<div class="ccard-name">'+d.nombre+'</div>'+
+      '<div class="ccard-id">'+d.cvs.length+' venta(s)</div>'+
+      '<div class="ccard-row"><span class="ccard-lbl">Total vendido</span><span class="ccard-val">'+fmt(d.totalV)+'</span></div>'+
+      '<div class="ccard-row"><span class="ccard-lbl">Total pagado</span><span class="ccard-val" style="color:var(--green)">'+fmt(d.pagado)+'</span></div>'+
+      '<div class="ccard-row"><span class="ccard-lbl">Facturas pendientes</span><span class="ccard-val">'+d.nPend+'</span></div>'+
+      '<div class="ccard-saldo '+(d.saldo<=0?'ccard-ok':'')+'">'+(d.saldo<=0?'✅ AL DÍA':fmt(d.saldo)+' DEBE')+'</div>'+
+    '</div>';
+  }).join('') : '<div style="color:var(--text3);padding:20px;text-align:center;">No se encontraron clientes</div>';
+
+  // Paginación
+  var pag = document.getElementById('cartera-paginacion');
+  if(!pag) return;
+  if(pages<=1){ pag.innerHTML=''; return; }
+
+  var btns = '';
+  // Botón anterior
+  btns += '<button onclick="irPagCartera('+((_carteraPagina-1)||1)+')" '+((_carteraPagina===1)?'disabled':'')+
+    ' style="padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text1);cursor:pointer;font-size:13px;">◀</button>';
+
+  // Páginas (máximo 7 botones visibles)
+  var start = Math.max(1, _carteraPagina-3);
+  var end   = Math.min(pages, start+6);
+  if(start>1) btns += '<span style="color:var(--text3);padding:0 4px;">…</span>';
+  for(var p=start;p<=end;p++){
+    var active = p===_carteraPagina;
+    btns += '<button onclick="irPagCartera('+p+')" style="padding:6px 12px;border-radius:8px;border:1px solid '+(active?'var(--accent)':'var(--border)')+
+      ';background:'+(active?'var(--accent)':'var(--surface)')+';color:'+(active?'#000':'var(--text1)')+
+      ';cursor:pointer;font-size:13px;font-weight:'+(active?'700':'400')+';">'+p+'</button>';
+  }
+  if(end<pages) btns += '<span style="color:var(--text3);padding:0 4px;">…</span>';
+
+  // Botón siguiente
+  btns += '<button onclick="irPagCartera('+((_carteraPagina<pages?_carteraPagina+1:pages))+')" '+
+    ((_carteraPagina===pages)?'disabled':'')+
+    ' style="padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text1);cursor:pointer;font-size:13px;">▶</button>';
+
+  pag.innerHTML = btns;
+}
+
+function irPagCartera(p){
+  _carteraPagina = p;
+  renderCarteraCards();
+  document.getElementById('cartera-cards').scrollIntoView({behavior:'smooth',block:'start'});
+}
+window.filtrarCartera   = filtrarCartera;
+window.irPagCartera     = irPagCartera;
+
 
 // ======================================================
 // COBRO
@@ -2042,8 +2161,9 @@ function renderClientes(){
     var cid = c._id||c.id;
     return '<tr><td><span class="badge b-grey">'+(c.id||'—')+'</span></td><td><b>'+c.nombre+'</b></td>'+
       '<td>'+(c.nit||'')+'</td><td>'+(c.tel||'')+'</td><td>'+(c.email||'—')+'</td>'+
+      '<td><button onclick="generarCertificado(\''+c.nombre+'\')" style="background:#7C3AED;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;">📜 Certificado</button></td>'+
       '<td><button class="btn btn-danger btn-sm" onclick="delCliente(\''+cid+'\')">Eliminar</button></td></tr>';
-  }).join('') || '<tr class="empty-row"><td colspan="6">Sin clientes</td></tr>';
+  }).join('') || '<tr class="empty-row"><td colspan="7">Sin clientes</td></tr>';
 }
 function filterClientes(v){ cliFilter=v; renderClientes(); }
 async function addCliente(){
@@ -2490,17 +2610,102 @@ async function generarExcelCompleto(tipo){
     showToast('⏳ Cargando Excel... intenta de nuevo en 2 segundos');
     return;
   }
-  showToast('⏳ Generando Excel...');
+  showToast('⏳ Generando Excel completo...');
   var wb=new ExcelJS.Workbook();
   wb.creator='Mina Arrecife'; wb.created=new Date();
   var ventas=movimientos.filter(function(m){ return m.tipo==='VENTA'; });
 
-  // ── HOJA REMISIONES ──────────────────────────────
-  var ws1=wb.addWorksheet('Remisiones');
+  // Agrupar ventas por cliente
+  var porCliente={};
+  ventas.forEach(function(v){
+    var k=v.clienteNombre||'Sin nombre';
+    if(!porCliente[k]) porCliente[k]=[];
+    porCliente[k].push(v);
+  });
+  var clientes=Object.keys(porCliente).sort();
+
+  // ══════════════════════════════════════════════
+  // HOJA 1 — RESUMEN (cuadro interactivo)
+  // ══════════════════════════════════════════════
+  var ws0=wb.addWorksheet('📋 Resumen por Cliente');
+  ws0.views=[{showGridLines:false}];
+  ws0.getColumn(1).width=30;
+  ws0.getColumn(2).width=12;
+  ws0.getColumn(3).width=16;
+  ws0.getColumn(4).width=16;
+  ws0.getColumn(5).width=16;
+  ws0.getColumn(6).width=14;
+
+  addEncabezado(ws0,6,'RESUMEN GENERAL POR CLIENTE');
+
+  // Instrucción
+  ws0.mergeCells(6,1,6,6);
+  var cInst=ws0.getRow(6).getCell(1);
+  cInst.value='💡 Haz clic en el nombre del cliente para ir a su hoja individual';
+  cInst.font=xlFont({color:'D97706',size:10,bold:true});
+  cInst.fill=xlF('FEF3C7');
+  cInst.alignment=xlAlign('center','middle');
+  ws0.getRow(6).height=18;
+
+  // Encabezados resumen
+  var hRes=['Cliente','Remisiones','Total Facturado','Total Pagado','Saldo Debe','Estado'];
+  addHeaders(ws0,7,hRes,[30,12,16,16,16,14]);
+
+  var filaRes=8;
+  clientes.forEach(function(cli){
+    var vv=porCliente[cli];
+    var totalF=vv.reduce(function(a,b){return a+b.total;},0);
+    var totalP=vv.reduce(function(a,b){return a+(b.totalPagado||0);},0);
+    var saldo=totalF-totalP;
+    var r=ws0.getRow(filaRes); r.height=20;
+    var bg=filaRes%2===0?'F1F5F9':'F8FAFC';
+
+    // Celda cliente con hipervínculo a su hoja
+    var cCli=r.getCell(1);
+    var sheetName=cli.substring(0,28); // Excel limita nombres de hoja
+    cCli.value={text:cli, hyperlink:"#'"+sheetName+"'!A1"};
+    cCli.font={name:'Arial',size:10,bold:true,color:{argb:'FF2563EB'},underline:true};
+    cCli.fill=xlF(bg); cCli.border=xlB(); cCli.alignment=xlAlign('left','middle');
+
+    var c2=r.getCell(2); c2.value=vv.length; c2.font=xlFont({size:10}); c2.fill=xlF(bg); c2.border=xlB(); c2.alignment=xlAlign('center','middle');
+    var c3=r.getCell(3); c3.value=totalF; c3.numFmt='"$"#,##0'; c3.font=xlFont({bold:true}); c3.fill=xlF(bg); c3.border=xlB(); c3.alignment=xlAlign('right','middle');
+    var c4=r.getCell(4); c4.value=totalP; c4.numFmt='"$"#,##0'; c4.font=xlFont({}); c4.fill=xlF(bg); c4.border=xlB(); c4.alignment=xlAlign('right','middle');
+
+    var c5=r.getCell(5); c5.value=saldo; c5.numFmt='"$"#,##0';
+    c5.font=xlFont({bold:saldo>0,color:saldo>0?'DC2626':'16A34A'});
+    c5.fill=xlF(saldo>0?'FEE2E2':'DCFCE7'); c5.border=xlB(); c5.alignment=xlAlign('right','middle');
+
+    var estadoTxt=saldo<=0?'Al día':'Debe';
+    var c6=r.getCell(6); c6.value=estadoTxt;
+    c6.font=xlFont({bold:true,color:saldo<=0?'16A34A':'DC2626'});
+    c6.fill=xlF(saldo<=0?'DCFCE7':'FEE2E2'); c6.border=xlB(); c6.alignment=xlAlign('center','middle');
+    filaRes++;
+  });
+
+  // Fila totales resumen
+  var trRes=filaRes;
+  var r=ws0.getRow(trRes); r.height=22;
+  var vals0=['GRAN TOTAL ('+clientes.length+' clientes)',
+    ventas.length,
+    ventas.reduce(function(a,b){return a+b.total;},0),
+    ventas.reduce(function(a,b){return a+(b.totalPagado||0);},0),
+    ventas.reduce(function(a,b){return a+(b.total-(b.totalPagado||0));},0),''];
+  vals0.forEach(function(v,i){
+    var c=r.getCell(i+1);
+    c.value=v; c.fill=xlF('1E293B'); c.border=xlB('F5A623');
+    c.font=xlFont({bold:true,color:'F5A623',size:10});
+    if(i>=2&&i<=4){c.numFmt='"$"#,##0'; c.alignment=xlAlign('right','middle');}
+    else c.alignment=xlAlign(i===0?'left':'center','middle');
+  });
+
+  // ══════════════════════════════════════════════
+  // HOJA 2 — TODAS LAS REMISIONES (con filtros ▼)
+  // ══════════════════════════════════════════════
+  var ws1=wb.addWorksheet('📄 Todas las Remisiones');
   ws1.views=[{showGridLines:false}];
   var h1=['Fecha','Hora','Remisión','Cliente','CC/NIT','Obra','Placa','Destino','Material','Cantidad','Precio','Subtotal','IVA','Total','F. Pago','Estado'];
   var w1=[12,8,13,24,14,16,10,14,18,10,13,13,12,13,13,11];
-  addEncabezado(ws1,h1.length,'REPORTE DE REMISIONES');
+  addEncabezado(ws1,h1.length,'REPORTE DE REMISIONES — usa ▼ para filtrar por cliente, fecha o estado');
   addHeaders(ws1,6,h1,w1);
   ventas.forEach(function(v,i){
     var mat=getMat(v.matId); var sub=v.cant*v.precio;
@@ -2518,12 +2723,14 @@ async function generarExcelCompleto(tipo){
   ws1.autoFilter={from:{row:6,column:1},to:{row:6,column:h1.length}};
   ws1.views[0].state='frozen'; ws1.views[0].ySplit=6;
 
-  // ── HOJA CARTERA ──────────────────────────────
-  var ws2=wb.addWorksheet('Cartera');
+  // ══════════════════════════════════════════════
+  // HOJA 3 — CARTERA
+  // ══════════════════════════════════════════════
+  var ws2=wb.addWorksheet('💰 Cartera');
   ws2.views=[{showGridLines:false}];
   var h2=['Fecha','Remisión','Cliente','CC/NIT','Material','Cantidad','Total','Pagado','Saldo','F. Pago','Estado'];
   var w2=[12,13,24,14,18,10,13,13,13,13,11];
-  addEncabezado(ws2,h2.length,'ESTADO DE CARTERA');
+  addEncabezado(ws2,h2.length,'ESTADO DE CARTERA — usa ▼ para filtrar');
   addHeaders(ws2,6,h2,w2);
   ventas.forEach(function(v,i){
     var mat=getMat(v.matId); var pagado=v.totalPagado||0;
@@ -2540,25 +2747,83 @@ async function generarExcelCompleto(tipo){
   ws2.autoFilter={from:{row:6,column:1},to:{row:6,column:h2.length}};
   ws2.views[0].state='frozen'; ws2.views[0].ySplit=6;
 
-  // ── HOJA CLIENTE (si aplica) ──────────────────
+  // ══════════════════════════════════════════════
+  // HOJAS INDIVIDUALES POR CLIENTE
+  // ══════════════════════════════════════════════
+  var h3=['Fecha','Remisión','Material','Cantidad','Precio','Subtotal','IVA','Total','F. Pago','Estado','Pagado','Saldo','Obra','Placa','Destino'];
+  var w3=[12,13,20,10,13,13,12,13,13,11,13,13,16,10,14];
+
+  clientes.forEach(function(cli){
+    var vv=porCliente[cli];
+    var sheetName=cli.substring(0,28);
+    var wsCli=wb.addWorksheet(sheetName);
+    wsCli.views=[{showGridLines:false}];
+
+    var totalF=vv.reduce(function(a,b){return a+b.total;},0);
+    var totalP=vv.reduce(function(a,b){return a+(b.totalPagado||0);},0);
+    var saldo=totalF-totalP;
+    var cedula=vv[0].cedula||'';
+
+    addEncabezado(wsCli,h3.length,'ESTADO DE CUENTA — '+cli.toUpperCase()+' | CC/NIT: '+cedula);
+
+    // KPI rápido del cliente
+    wsCli.mergeCells(6,1,6,5);
+    var kFact=wsCli.getRow(6).getCell(1);
+    kFact.value='TOTAL FACTURADO:  $'+totalF.toLocaleString('es-CO');
+    kFact.font=xlFont({bold:true,color:'0B0F1A',size:11}); kFact.fill=xlF('FDE68A'); kFact.alignment=xlAlign('center','middle');
+    wsCli.mergeCells(6,6,6,10);
+    var kPag=wsCli.getRow(6).getCell(6);
+    kPag.value='TOTAL PAGADO:  $'+totalP.toLocaleString('es-CO');
+    kPag.font=xlFont({bold:true,color:'16A34A',size:11}); kPag.fill=xlF('DCFCE7'); kPag.alignment=xlAlign('center','middle');
+    wsCli.mergeCells(6,11,6,15);
+    var kSal=wsCli.getRow(6).getCell(11);
+    kSal.value='SALDO PENDIENTE:  $'+saldo.toLocaleString('es-CO');
+    kSal.font=xlFont({bold:true,color:saldo>0?'DC2626':'16A34A',size:11});
+    kSal.fill=xlF(saldo>0?'FEE2E2':'DCFCE7'); kSal.alignment=xlAlign('center','middle');
+    wsCli.getRow(6).height=24;
+
+    addHeaders(wsCli,7,h3,w3);
+    vv.forEach(function(v,i){
+      var mat=getMat(v.matId); var sub=v.cant*v.precio; var sal=v.total-(v.totalPagado||0);
+      addDataRow(wsCli,8+i,[v.fecha,v.remision,mat?mat.nombre:v.matId,
+        v.cant,v.precio,sub,v.iva||0,v.total,v.fpago,v.estado||'',
+        v.totalPagado||0,sal,v.obra||'',v.placa||'',v.destino||''],h3);
+    });
+    var trC=8+vv.length;
+    addTotalRow(wsCli,trC,['','',''
+      ,vv.reduce(function(a,b){return a+b.cant;},0),'',
+      vv.reduce(function(a,b){return a+b.cant*b.precio;},0),
+      vv.reduce(function(a,b){return a+(b.iva||0);},0),
+      totalF,'','',totalP,saldo,'','',''],
+      h3,'TOTAL  ('+vv.length+' remisiones)');
+    wsCli.autoFilter={from:{row:7,column:1},to:{row:7,column:h3.length}};
+    wsCli.views[0].state='frozen'; wsCli.views[0].ySplit=7;
+
+    // Hipervínculo de vuelta al resumen
+    var cVolver=wsCli.getRow(trC+2).getCell(1);
+    cVolver.value={text:'⬅ Volver al Resumen', hyperlink:"#'📋 Resumen por Cliente'!A1"};
+    cVolver.font={name:'Arial',size:9,color:{argb:'FF2563EB'},underline:true};
+  });
+
+  // ── HOJA BÚSQUEDA CLIENTE (si viene de esa pantalla) ──
   if(tipo==='cliente'&&_bcResultados.length){
-    var ws3=wb.addWorksheet('Busqueda Cliente');
-    ws3.views=[{showGridLines:false}];
     var cliNom=(document.getElementById('bc-cliente').value||document.getElementById('bc-nombre').value||'Cliente').toUpperCase();
     var desde=document.getElementById('bc-desde').value||'inicio';
     var hasta=document.getElementById('bc-hasta').value||'hoy';
-    var h3=['Fecha','Remisión','Cliente','CC/NIT','Material','Cantidad','Precio','Subtotal','IVA','Total','F. Pago','Estado','Pagado','Saldo','Obra','Placa','Destino'];
-    var w3=[12,13,24,14,18,10,13,13,12,13,13,11,13,13,16,10,14];
-    addEncabezado(ws3,h3.length,'ESTADO DE CUENTA — '+cliNom+' | '+desde+' → '+hasta);
-    addHeaders(ws3,6,h3,w3);
+    var wsBc=wb.addWorksheet('🔍 Búsqueda: '+cliNom.substring(0,20));
+    wsBc.views=[{showGridLines:false}];
+    var hBc=['Fecha','Remisión','Cliente','CC/NIT','Material','Cantidad','Precio','Subtotal','IVA','Total','F. Pago','Estado','Pagado','Saldo','Obra','Placa','Destino'];
+    var wBc=[12,13,24,14,18,10,13,13,12,13,13,11,13,13,16,10,14];
+    addEncabezado(wsBc,hBc.length,'ESTADO DE CUENTA — '+cliNom+' | '+desde+' → '+hasta);
+    addHeaders(wsBc,6,hBc,wBc);
     _bcResultados.forEach(function(v,i){
-      var mat=getMat(v.matId); var sub=v.cant*v.precio; var saldo=v.total-(v.totalPagado||0);
-      addDataRow(ws3,7+i,[v.fecha,v.remision,v.clienteNombre,v.cedula||'',
+      var mat=getMat(v.matId); var sub=v.cant*v.precio; var sal=v.total-(v.totalPagado||0);
+      addDataRow(wsBc,7+i,[v.fecha,v.remision,v.clienteNombre,v.cedula||'',
         mat?mat.nombre:v.matId,v.cant,v.precio,sub,v.iva||0,v.total,
-        v.fpago,v.estado||'',v.totalPagado||0,saldo,v.obra||'',v.placa||'',v.destino||''],h3);
+        v.fpago,v.estado||'',v.totalPagado||0,sal,v.obra||'',v.placa||'',v.destino||''],hBc);
     });
-    var tr3=7+_bcResultados.length;
-    addTotalRow(ws3,tr3,['','','','','',
+    var trBc=7+_bcResultados.length;
+    addTotalRow(wsBc,trBc,['','','','','',
       _bcResultados.reduce(function(a,b){return a+b.cant;},0),'',
       _bcResultados.reduce(function(a,b){return a+b.cant*b.precio;},0),
       _bcResultados.reduce(function(a,b){return a+(b.iva||0);},0),
@@ -2567,22 +2832,21 @@ async function generarExcelCompleto(tipo){
       _bcResultados.reduce(function(a,b){return a+(b.totalPagado||0);},0),
       _bcResultados.reduce(function(a,b){return a+(b.total-(b.totalPagado||0));},0),
       '','',''],
-      h3,'TOTAL  ('+_bcResultados.length+' remisiones)');
-    ws3.autoFilter={from:{row:6,column:1},to:{row:6,column:h3.length}};
-    ws3.views[0].state='frozen'; ws3.views[0].ySplit=6;
+      hBc,'TOTAL  ('+_bcResultados.length+' remisiones)');
+    wsBc.autoFilter={from:{row:6,column:1},to:{row:6,column:hBc.length}};
+    wsBc.views[0].state='frozen'; wsBc.views[0].ySplit=6;
   }
 
+  // ── Descargar ────────────────────────────────
   var buf=await wb.xlsx.writeBuffer();
   var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a');
-  var cliN=document.getElementById('bc-cliente')?document.getElementById('bc-cliente').value||document.getElementById('bc-nombre').value||'X':'X';
-  var fname=tipo==='cliente'
-    ?'Cliente_'+cliN.replace(/\s/g,'_')+'_'+today()+'.xlsx'
-    :'MinaArrecife_'+tipo+'_'+today()+'.xlsx';
+  var cliN=tipo==='cliente'?(document.getElementById('bc-cliente').value||document.getElementById('bc-nombre').value||'X'):'completo';
+  var fname='MinaArrecife_'+cliN.replace(/\s/g,'_')+'_'+today()+'.xlsx';
   a.href=url; a.download=fname; a.click();
   URL.revokeObjectURL(url);
-  showToast('✅ Excel descargado: '+fname);
+  showToast('✅ Excel listo: '+(clientes.length+3)+' hojas generadas');
 }
 
 function exportCarteraExcel()  { generarExcelCompleto('Cartera');    }
@@ -2693,16 +2957,415 @@ function exportBCPDF(){
   win.focus();
 }
 
+// ======================================================
+// BÚSQUEDA POR CLIENTE
+// ======================================================
+var _bcResultados = [];
+
+function initBusquedaCliente(){
+  var sel = document.getElementById('bc-cliente');
+  if(!sel) return;
+  var nombres = [...new Set(movimientos.filter(function(m){ return m.tipo==='VENTA'; }).map(function(v){ return v.clienteNombre; }))].sort();
+  sel.innerHTML = '<option value="">-- Todos los clientes --</option>'+
+    nombres.map(function(n){ return '<option value="'+n+'">'+n+'</option>'; }).join('');
+}
+
+function runBusquedaCliente(){
+  var selVal  = (document.getElementById('bc-cliente')||{value:''}).value;
+  var nomVal  = ((document.getElementById('bc-nombre')||{value:''}).value||'').toLowerCase().trim();
+  var desde   = (document.getElementById('bc-desde')||{value:''}).value;
+  var hasta   = (document.getElementById('bc-hasta')||{value:''}).value;
+  var estado  = (document.getElementById('bc-estado')||{value:''}).value;
+
+  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
+
+  _bcResultados = ventas.filter(function(v){
+    if(selVal && v.clienteNombre !== selVal) return false;
+    if(nomVal && !(v.clienteNombre||'').toLowerCase().includes(nomVal)) return false;
+    if(desde  && v.fecha < desde) return false;
+    if(hasta  && v.fecha > hasta) return false;
+    if(estado && v.estado !== estado) return false;
+    return true;
+  });
+
+  var totalFact   = _bcResultados.reduce(function(a,b){ return a+b.total; },0);
+  var totalPagado = _bcResultados.reduce(function(a,b){ return a+(b.totalPagado||0); },0);
+  var totalSaldo  = totalFact - totalPagado;
+
+  // KPIs — usa bc-kgrid (el ID real del HTML)
+  var kEl = document.getElementById('bc-kgrid');
+  if(kEl){
+    if(_bcResultados.length){
+      kEl.style.display = '';
+      kEl.innerHTML =
+        kpi('Remisiones',      _bcResultados.length,          'encontradas',  'ck-blue')+
+        kpi('Total Facturado', fmt(totalFact),                 'bruto',        'ck-gold')+
+        kpi('Total IVA',       fmt(_bcResultados.reduce(function(a,b){return a+(b.iva||0);},0)), 'IVA', 'ck-amber')+
+        kpi('Saldo Pendiente', fmt(totalSaldo),                'por cobrar',   'ck-red');
+    } else {
+      kEl.style.display = 'none';
+    }
+  }
+
+  // Totales pie
+  var totDiv = document.getElementById('bc-totales');
+  if(totDiv){
+    totDiv.style.display = _bcResultados.length ? '' : 'none';
+    if(_bcResultados.length){
+      document.getElementById('bc-t-count').textContent  = _bcResultados.length;
+      document.getElementById('bc-t-total').textContent  = fmt(totalFact);
+      document.getElementById('bc-t-pagado').textContent = fmt(totalPagado);
+      document.getElementById('bc-t-saldo').textContent  = fmt(totalSaldo);
+    }
+  }
+
+  // Contador
+  var cnt = document.getElementById('bc-count');
+  if(cnt) cnt.textContent = _bcResultados.length ? _bcResultados.length+' resultado(s)' : '';
+
+  // Tabla — usa tbl-bc (el ID real del HTML)
+  var tbl = document.getElementById('tbl-bc');
+  if(!tbl) return;
+  if(!_bcResultados.length){
+    tbl.innerHTML = '<tr class="empty-row"><td colspan="11">No se encontraron resultados</td></tr>';
+    return;
+  }
+  tbl.innerHTML = _bcResultados.map(function(v){
+    var mat   = getMat(v.matId);
+    var saldo = v.total - (v.totalPagado||0);
+    var sub   = v.cant * v.precio;
+    return '<tr>'+
+      '<td>'+v.fecha+'</td>'+
+      '<td>'+v.remision+'</td>'+
+      '<td>'+(mat?mat.nombre:v.matId||'')+'</td>'+
+      '<td style="text-align:center">'+v.cant+'</td>'+
+      '<td style="text-align:right">'+fmt(v.precio)+'</td>'+
+      '<td style="text-align:right">'+fmt(v.iva||0)+'</td>'+
+      '<td style="text-align:right;font-weight:700">'+fmt(v.total)+'</td>'+
+      '<td><span class="badge '+fpClass(v.fpago)+'">'+v.fpago+'</span></td>'+
+      '<td>'+estadoBadge(v.estado)+'</td>'+
+      '<td style="text-align:right;color:'+(saldo>0?'var(--red)':'var(--green)')+';font-weight:700">'+fmt(saldo)+'</td>'+
+      '<td><button onclick="printRemision(\''+v.remision+'\')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer;">🖨</button></td>'+
+    '</tr>';
+  }).join('');
+}
+
+function limpiarBusquedaCliente(){
+  ['bc-cliente','bc-nombre','bc-desde','bc-hasta','bc-estado'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  _bcResultados = [];
+  var tbl = document.getElementById('tbl-bc');
+  if(tbl) tbl.innerHTML = '<tr class="empty-row"><td colspan="11">Usa los filtros para buscar</td></tr>';
+  var kEl = document.getElementById('bc-kgrid');
+  if(kEl) kEl.style.display = 'none';
+  var tot = document.getElementById('bc-totales');
+  if(tot) tot.style.display = 'none';
+  var cnt = document.getElementById('bc-count');
+  if(cnt) cnt.textContent = '';
+}
+
+
+// ======================================================
+// PDF EXPORTS (abrirPDF + Cartera + Ventas + Consulta)
+// ======================================================
+function abrirPDF(contenido){
+  var estilos = '<style>'+
+    'body{font-family:Arial,sans-serif;font-size:11pt;color:#0B0F1A;margin:20px;}'+
+    'h1{background:#0B0F1A;color:#F5A623;padding:14px 20px;border-radius:6px;font-size:15pt;margin-bottom:4px;}'+
+    '.sub{color:#475569;font-size:10pt;margin-bottom:16px;}'+
+    'table{width:100%;border-collapse:collapse;font-size:9.5pt;}'+
+    'th{background:#1E293B;color:#fff;padding:6px 8px;text-align:left;border:1px solid #CBD5E1;}'+
+    'td{padding:5px 8px;border:1px solid #CBD5E1;}'+
+    'tr:nth-child(even){background:#F8FAFC;}'+
+    '.total{font-weight:700;text-align:right;}'+
+    '.no-print{text-align:center;margin-top:16px;}'+
+    '@media print{.no-print{display:none;}}'+
+    '</style>';
+  var botones = '<div class="no-print">'+
+    '<button onclick="window.print()" style="background:#0B0F1A;color:#F5A623;border:none;padding:10px 28px;font-size:13px;font-weight:700;border-radius:6px;cursor:pointer;margin-right:8px;">🖨 Imprimir / Guardar PDF</button>'+
+    '<button onclick="window.close()" style="background:#F1F5F9;color:#333;border:1px solid #CBD5E1;padding:10px 18px;font-size:13px;border-radius:6px;cursor:pointer;">✕ Cerrar</button>'+
+    '</div>';
+  var win = window.open('','_blank','width=1000,height=750');
+  if(!win){ showToast('❌ Activa las ventanas emergentes en tu navegador'); return; }
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8">'+estilos+'</head><body>'+contenido+botones+'</body></html>');
+  win.document.close();
+  win.focus();
+}
+
+function exportCarteraPDF(){
+  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
+  var totalPend = ventas.reduce(function(a,b){ return a+(b.total-(b.totalPagado||0)); },0);
+  var filas = ventas.map(function(v){
+    var mat=getMat(v.matId); var saldo=v.total-(v.totalPagado||0);
+    return '<tr><td>'+v.fecha+'</td><td>'+v.remision+'</td><td><b>'+v.clienteNombre+'</b></td>'+
+      '<td>'+(v.cedula||'')+'</td><td>'+(mat?mat.nombre:v.matId)+'</td>'+
+      '<td class="total">'+fmt(v.total)+'</td>'+
+      '<td class="total" style="color:'+(saldo>0?'#DC2626':'#16A34A')+'">'+fmt(saldo)+'</td>'+
+      '<td>'+v.fpago+'</td><td>'+(v.estado||'')+'</td></tr>';
+  }).join('');
+  abrirPDF(
+    '<h1>MINA ARRECIFE — INFORME DE CARTERA</h1>'+
+    '<div class="sub">NIT: 901.471.724-2 | Fecha: '+today()+'</div>'+
+    '<table><thead><tr><th>Fecha</th><th>Remisión</th><th>Cliente</th><th>CC/NIT</th><th>Material</th><th>Total</th><th>Saldo</th><th>F.Pago</th><th>Estado</th></tr></thead>'+
+    '<tbody>'+filas+'</tbody></table>'+
+    '<p class="total" style="margin-top:12px;font-size:12pt;">TOTAL PENDIENTE: <span style="color:#DC2626">'+fmt(totalPend)+'</span></p>'
+  );
+}
+
+function exportVentasPDF(){
+  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
+  var totalVend = ventas.reduce(function(a,b){ return a+b.total; },0);
+  var totalIVA  = ventas.reduce(function(a,b){ return a+(b.iva||0); },0);
+  var filas = ventas.map(function(v){
+    var mat=getMat(v.matId);
+    return '<tr><td>'+v.fecha+'</td><td>'+v.remision+'</td><td><b>'+v.clienteNombre+'</b></td>'+
+      '<td>'+(mat?mat.nombre:v.matId)+'</td>'+
+      '<td style="text-align:right">'+v.cant+'</td>'+
+      '<td class="total">'+fmt(v.precio)+'</td>'+
+      '<td class="total">'+fmt(v.iva||0)+'</td>'+
+      '<td class="total">'+fmt(v.total)+'</td>'+
+      '<td>'+v.fpago+'</td><td>'+(v.estado||'')+'</td></tr>';
+  }).join('');
+  abrirPDF(
+    '<h1>MINA ARRECIFE — REPORTE DE REMISIONES</h1>'+
+    '<div class="sub">NIT: 901.471.724-2 | Generado: '+today()+' | Total: '+ventas.length+' remisiones</div>'+
+    '<table><thead><tr><th>Fecha</th><th>Remisión</th><th>Cliente</th><th>Material</th><th>Cant.</th><th>Precio</th><th>IVA</th><th>Total</th><th>F.Pago</th><th>Estado</th></tr></thead>'+
+    '<tbody>'+filas+'</tbody></table>'+
+    '<p class="total" style="margin-top:12px;font-size:12pt;">TOTAL VENDIDO: '+fmt(totalVend)+' | IVA: '+fmt(totalIVA)+'</p>'
+  );
+}
+
+function exportConsultaPDF(){
+  var lista = (typeof _consultaResultados!=='undefined' && _consultaResultados.length) ? _consultaResultados :
+              (typeof _bcResultados!=='undefined' && _bcResultados.length) ? _bcResultados : [];
+  if(!lista.length){ showToast('No hay resultados para exportar'); return; }
+  var totalV = lista.reduce(function(a,b){ return a+b.total; },0);
+  var filas = lista.map(function(v){
+    var mat=getMat(v.matId); var saldo=v.total-(v.totalPagado||0);
+    return '<tr><td>'+v.fecha+'</td><td>'+v.remision+'</td><td><b>'+v.clienteNombre+'</b></td>'+
+      '<td>'+(mat?mat.nombre:v.matId)+'</td>'+
+      '<td class="total">'+fmt(v.total)+'</td>'+
+      '<td class="total" style="color:'+(saldo>0?'#DC2626':'#16A34A')+'">'+fmt(saldo)+'</td>'+
+      '<td>'+v.fpago+'</td><td>'+(v.estado||'')+'</td></tr>';
+  }).join('');
+  abrirPDF(
+    '<h1>MINA ARRECIFE — CONSULTA</h1>'+
+    '<div class="sub">Fecha: '+today()+' | '+lista.length+' resultados</div>'+
+    '<table><thead><tr><th>Fecha</th><th>Remisión</th><th>Cliente</th><th>Material</th><th>Total</th><th>Saldo</th><th>F.Pago</th><th>Estado</th></tr></thead>'+
+    '<tbody>'+filas+'</tbody></table>'+
+    '<p class="total" style="margin-top:12px;font-size:12pt;">TOTAL: '+fmt(totalV)+'</p>'
+  );
+}
+
+window.abrirPDF          = abrirPDF;
+window.exportCarteraPDF  = exportCarteraPDF;
+window.exportVentasPDF   = exportVentasPDF;
+window.exportConsultaPDF = exportConsultaPDF;
+
 window.runBusquedaCliente    = runBusquedaCliente;
 window.limpiarBusquedaCliente= limpiarBusquedaCliente;
+
 window.exportBCExcel         = exportBCExcel;
 window.exportBCPDF           = exportBCPDF;
 
 window.exportVentasExcel   = exportVentasExcel;
 window.exportConsultaExcel = exportConsultaExcel;
-window.exportCarteraPDF    = exportCarteraPDF;
-window.exportVentasPDF     = exportVentasPDF;
-window.exportConsultaPDF   = exportConsultaPDF;
+
+// ======================================================
+// CERTIFICACIÓN DE VENTAS POR CLIENTE
+// ======================================================
+function generarCertificado(clienteNombre){
+  var cli    = clientes.find(function(c){ return c.nombre===clienteNombre; });
+  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA' && m.clienteNombre===clienteNombre; })
+                          .sort(function(a,b){ return a.fecha.localeCompare(b.fecha)||a.remision.localeCompare(b.remision); });
+
+  if(!ventas.length){
+    alert('Este cliente no tiene remisiones registradas.');
+    return;
+  }
+
+  var nit    = (cli && cli.nit)   || '';
+  var tel    = (cli && cli.tel)   || '';
+  var ciudad = (cli && cli.dir)   || '';
+
+  var totalFact   = ventas.reduce(function(a,b){ return a+b.total; },0);
+  var totalPagado = ventas.reduce(function(a,b){ return a+(b.totalPagado||0); },0);
+  var totalSaldo  = totalFact - totalPagado;
+  var totalIVA    = ventas.reduce(function(a,b){ return a+(b.iva||0); },0);
+  var totalCant   = ventas.reduce(function(a,b){ return a+b.cant; },0);
+
+  var ahora       = new Date();
+  var mesesN      = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var mesesMAY    = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  var fechaEmision= ('0'+ahora.getDate()).slice(-2)+' de '+mesesN[ahora.getMonth()]+' de '+ahora.getFullYear();
+  var horaEmision = ('0'+ahora.getHours()).slice(-2)+':'+('0'+ahora.getMinutes()).slice(-2)+':'+('0'+ahora.getSeconds()).slice(-2);
+  var codigoCert  = 'CERT-'+clienteNombre.replace(/\s+/g,'').substring(0,6).toUpperCase()+
+                    '-'+ahora.getFullYear()+('0'+(ahora.getMonth()+1)).slice(-2)+('0'+ahora.getDate()).slice(-2)+
+                    '-'+Math.floor(1000+Math.random()*9000);
+
+  // Logo base64
+  var imgs = document.querySelectorAll('img[src^="data:image"]');
+  var logoSrc = imgs.length ? imgs[0].src : '';
+
+  // Filas de despachos
+  var filasDespachos = ventas.map(function(v){
+    var mat    = getMat(v.matId);
+    var matNom = mat ? mat.nombre.toUpperCase() : (v.matId||'').toUpperCase();
+    var partes = (v.fecha||'').split('-');
+    var fDate  = partes.length===3 ? mesesMAY[parseInt(partes[1])-1]+' '+partes[2]+' DE '+partes[0] : v.fecha;
+    var saldo  = v.total-(v.totalPagado||0);
+    var estColor = v.estado==='Pagado' ? '#166534' : v.estado==='Parcial' ? '#92400e' : '#991b1b';
+    var estBg    = v.estado==='Pagado' ? '#dcfce7'  : v.estado==='Parcial' ? '#fef3c7'  : '#fee2e2';
+    return '<tr>'+
+      '<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;">'+fDate+(v.hora?' '+v.hora:'')+'</td>'+
+      '<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;font-weight:700;">'+v.remision+'</td>'+
+      '<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;">'+matNom+'</td>'+
+      '<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;text-align:center;">'+fmtN(v.cant)+'</td>'+
+      '<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;text-align:right;">'+fmt(v.cant*v.precio)+'</td>'+
+      (v.iva>0?'<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;text-align:right;">'+fmt(v.iva)+'</td>':'<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;text-align:center;">—</td>')+
+      '<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;text-align:right;font-weight:700;">'+fmt(v.total)+'</td>'+
+      '<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;text-align:right;color:'+(saldo>0?'#991b1b':'#166534')+';font-weight:700;">'+fmt(saldo)+'</td>'+
+      '<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;"><span style="background:'+estBg+';color:'+estColor+';padding:1px 6px;border-radius:10px;font-size:8px;font-weight:700;">'+v.estado+'</span></td>'+
+      '<td style="padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:9px;">'+(v.fpago||'')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+  '<style>'+
+    '@page{size:Letter;margin:15mm 15mm 20mm 15mm;}'+
+    'html,body{margin:0;padding:0;font-family:Arial,sans-serif;font-size:10px;color:#111;}'+
+    '.header{display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #000;padding-bottom:8px;margin-bottom:10px;}'+
+    '.header-logo{width:90px;}'+
+    '.header-emp{text-align:center;flex:1;}'+
+    '.header-emp .empresa{font-size:16px;font-weight:900;letter-spacing:1px;}'+
+    '.header-emp .sub{font-size:9px;color:#444;line-height:1.6;}'+
+    '.header-right{text-align:right;font-size:9px;line-height:1.7;}'+
+    '.titulo{text-align:center;font-size:13px;font-weight:900;letter-spacing:2px;border:2px solid #000;padding:5px 0;margin:8px 0;background:#f9f9f9;}'+
+    '.codigo{text-align:center;font-size:9px;color:#555;margin-bottom:8px;letter-spacing:0.5px;}'+
+    '.sep{border:none;border-top:1px dashed #000;margin:6px 0;}'+
+    '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 20px;margin:6px 0;}'+
+    '.fila{font-size:9px;margin:1px 0;display:flex;}'+
+    '.fila b{width:100px;flex-shrink:0;font-weight:700;}'+
+    '.fila span{flex:1;}'+
+    '.section-title{font-size:10px;font-weight:900;letter-spacing:1px;border-bottom:2px solid #000;padding-bottom:2px;margin:10px 0 4px 0;}'+
+    'table{width:100%;border-collapse:collapse;margin:4px 0;}'+
+    'thead th{background:#111;color:#fff;padding:4px 6px;font-size:9px;text-align:left;font-weight:700;}'+
+    'thead th.r{text-align:right;}thead th.c{text-align:center;}'+
+    '.total-block{margin-top:6px;border-top:2px solid #000;padding-top:4px;display:flex;justify-content:flex-end;}'+
+    '.total-table{font-size:9px;width:240px;}'+
+    '.total-table td{padding:2px 6px;}'+
+    '.total-table .grand{font-size:11px;font-weight:900;border-top:1px solid #000;}'+
+    '.firmas{display:flex;gap:20px;margin-top:14mm;}'+
+    '.fb{flex:1;text-align:center;font-size:8px;}'+
+    '.fl{border-bottom:1px solid #000;height:14mm;margin-bottom:3px;}'+
+    '.footer{margin-top:8px;border-top:1px dashed #000;padding-top:4px;font-size:8px;color:#555;text-align:center;line-height:1.6;}'+
+    '.badge-estado{padding:1px 8px;border-radius:10px;font-size:8px;font-weight:700;}'+
+    '@media print{.no-print{display:none!important;} body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}'+
+  '</style></head><body>'+
+
+  // ENCABEZADO
+  '<div class="header">'+
+    '<img src="'+logoSrc+'" class="header-logo" onerror="this.style.display=\'none\'">'+
+    '<div class="header-emp">'+
+      '<div class="empresa">BROUS INVESTMENTS SAS</div>'+
+      '<div class="sub">NIT: 901.471.724-2 &nbsp;|&nbsp; VEREDA PTO TEMBLEQUE<br>Móvil: 321 452 8140</div>'+
+    '</div>'+
+    '<div class="header-right">'+
+      '<b>Código:</b> '+codigoCert+'<br>'+
+      '<b>Emisión:</b> '+fechaEmision+'<br>'+
+      '<b>Hora:</b> '+horaEmision+'<br>'+
+      '<b>Emitido por:</b> '+CU.label.toUpperCase()+
+    '</div>'+
+  '</div>'+
+
+  // TÍTULO
+  '<div class="titulo">CERTIFICADO DE VENTAS Y DESPACHOS</div>'+
+  '<div class="codigo">Documento de carácter informativo — Válido con firma y sello de BROUS INVESTMENTS SAS</div>'+
+
+  '<hr class="sep">'+
+
+  // DATOS DEL CLIENTE
+  '<div class="section-title">DATOS DEL CLIENTE</div>'+
+  '<div class="info-grid">'+
+    '<div class="fila"><b>CLIENTE:</b><span>'+clienteNombre.toUpperCase()+'</span></div>'+
+    (nit?'<div class="fila"><b>NIT / CC:</b><span>'+nit+'</span></div>':'')+
+    (tel?'<div class="fila"><b>TELÉFONO:</b><span>'+tel+'</span></div>':'')+
+    (ciudad?'<div class="fila"><b>CIUDAD:</b><span>'+ciudad.toUpperCase()+'</span></div>':'')+
+  '</div>'+
+
+  '<hr class="sep">'+
+
+  // TABLA DE DESPACHOS
+  '<div class="section-title">CONSECUTIVO DE DESPACHOS ('+ventas.length+' remisión'+(ventas.length>1?'es':'')+')</div>'+
+  '<table>'+
+    '<thead><tr>'+
+      '<th>FECHA</th>'+
+      '<th>REMISIÓN</th>'+
+      '<th>MATERIAL</th>'+
+      '<th class="c">CANT.</th>'+
+      '<th class="r">SUBTOTAL</th>'+
+      '<th class="r">IVA</th>'+
+      '<th class="r">TOTAL</th>'+
+      '<th class="r">SALDO</th>'+
+      '<th>ESTADO</th>'+
+      '<th>F.PAGO</th>'+
+    '</tr></thead>'+
+    '<tbody>'+filasDespachos+'</tbody>'+
+  '</table>'+
+
+  // TOTALES
+  '<div class="total-block">'+
+    '<table class="total-table">'+
+      '<tr><td>Total despachos:</td><td style="text-align:right;font-weight:700;">'+ventas.length+'</td></tr>'+
+      '<tr><td>Total m³ / unidades:</td><td style="text-align:right;font-weight:700;">'+fmtN(totalCant)+'</td></tr>'+
+      (totalIVA>0?'<tr><td>Total IVA:</td><td style="text-align:right;">'+fmt(totalIVA)+'</td></tr>':'')+
+      '<tr><td>Total facturado:</td><td style="text-align:right;font-weight:700;">'+fmt(totalFact)+'</td></tr>'+
+      '<tr><td>Total pagado:</td><td style="text-align:right;color:#166534;font-weight:700;">'+fmt(totalPagado)+'</td></tr>'+
+      '<tr class="grand"><td><b>SALDO PENDIENTE:</b></td><td style="text-align:right;color:'+(totalSaldo>0?'#991b1b':'#166534')+';">'+fmt(totalSaldo)+'</td></tr>'+
+    '</table>'+
+  '</div>'+
+
+  '<hr class="sep">'+
+
+  // DECLARACIÓN
+  '<div style="font-size:9px;line-height:1.7;margin:6px 0;text-align:justify;">'+
+    'Por medio del presente documento, <b>BROUS INVESTMENTS SAS</b> con NIT 901.471.724-2, '+
+    'certifica que el cliente <b>'+clienteNombre.toUpperCase()+'</b>'+(nit?' identificado con NIT/CC <b>'+nit+'</b>':'')+
+    ' ha realizado un total de <b>'+ventas.length+' despacho'+(ventas.length>1?'s':'')+
+    '</b> por un valor acumulado de <b>'+fmt(totalFact)+'</b>, '+
+    'según el consecutivo de remisiones detallado en el presente certificado. '+
+    'Esta certificación se expide a solicitud del interesado en la fecha y hora indicadas.'+
+  '</div>'+
+
+  // FIRMAS
+  '<div class="firmas">'+
+    '<div class="fb"><div class="fl"></div>Firma Autorizada<br><b>BROUS INVESTMENTS SAS</b></div>'+
+    '<div class="fb"><div class="fl"></div>Sello de la empresa</div>'+
+    '<div class="fb"><div class="fl"></div>Firma y C.C. del cliente<br><b>'+clienteNombre.toUpperCase()+'</b></div>'+
+  '</div>'+
+
+  // PIE
+  '<div class="footer">'+
+    'BROUS INVESTMENTS SAS &nbsp;|&nbsp; NIT 901.471.724-2 &nbsp;|&nbsp; Vereda Pto Tembleque &nbsp;|&nbsp; Móvil: 321 452 8140<br>'+
+    'Certificado N° '+codigoCert+' &nbsp;|&nbsp; Generado el '+fechaEmision+' a las '+horaEmision+
+  '</div>'+
+
+  // BOTONES
+  '<div class="no-print" style="text-align:center;margin-top:10mm;display:flex;gap:8px;justify-content:center;">'+
+    '<button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:10px 28px;font-size:13px;font-weight:700;border-radius:5px;cursor:pointer;">🖨 IMPRIMIR / GUARDAR PDF</button>'+
+    '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:10px 18px;font-size:13px;border-radius:5px;cursor:pointer;">Cerrar</button>'+
+  '</div>'+
+
+  '</body></html>';
+
+  var win = window.open('','_blank','width=900,height=700,toolbar=0,menubar=0,location=0,scrollbars=1');
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}
+window.generarCertificado = generarCertificado;
 
 </script>
 </body>
