@@ -870,9 +870,31 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <div class="twrap">
 <div class="thead2"><div class="ttitle">Materiales Registrados</div></div>
 <div class="tscroll"><table><thead><tr>
-<th>ID</th><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Precio Base</th><th>Precio + IVA</th><th>Stock Mín.</th><th>Acción</th>
+<th>ID</th><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Precio Base</th><th>Precio + IVA</th><th>Stock Mín.</th><th>Acciones</th>
 </tr></thead><tbody id="tbl-mats"></tbody></table></div>
 </div>
+</div>
+
+<!-- Modal editar material -->
+<div id="modal-edit-mat" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px 32px;width:360px;max-width:95vw;">
+    <div style="font-size:16px;font-weight:800;margin-bottom:18px;color:var(--accent);">✏️ Editar Material</div>
+    <div id="edit-mat-nombre" style="font-weight:700;margin-bottom:14px;color:var(--text);font-size:14px;"></div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px;">Precio Base ($)</label>
+      <input type="number" id="edit-mat-precio" min="0" step="100"
+        style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:15px;font-weight:700;box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px;">Stock Mínimo</label>
+      <input type="number" id="edit-mat-min" min="0" step="1"
+        style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:15px;box-sizing:border-box;">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="cerrarEditMat()" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);padding:10px 20px;border-radius:8px;cursor:pointer;font-size:13px;">Cancelar</button>
+      <button onclick="guardarEditMat()" style="background:var(--accent);color:#000;border:none;padding:10px 24px;border-radius:8px;font-weight:800;cursor:pointer;font-size:13px;">💾 Guardar</button>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -1522,64 +1544,247 @@ function renderDash(){
 // ======================================================
 // BACKUP COMPLETO EN EXCEL
 // ======================================================
-function backupCompleto(){
-  showToast('⏳ Generando backup...');
-  var sep = ';';
-  var wb  = [];
+async function backupCompleto(){
+  showToast('⏳ Generando backup Excel...');
+  var ExcelJS = window.ExcelJS;
+  if(!ExcelJS){ alert('ExcelJS no cargó, intenta de nuevo.'); return; }
 
-  function hoja(titulo, headers, rows){
-    wb.push('=== '+titulo.toUpperCase()+' ===');
-    wb.push(headers.join(sep));
-    rows.forEach(function(r){ wb.push(r.map(function(c){ return '"'+String(c||'').replace(/"/g,'""')+'"'; }).join(sep)); });
-    wb.push('');
+  var workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Mina Arrecife';
+  workbook.created = new Date();
+
+  // Colores corporativos
+  var COLOR_HD  = '0B0F1A'; // encabezado oscuro
+  var COLOR_ACC = 'F5A623'; // dorado
+  var COLOR_GRN = '166534';
+  var COLOR_RED = '991B1B';
+  var COLOR_BLU = '1D4ED8';
+
+  function estFill(estado){
+    if(estado==='Pagado')   return {type:'pattern',pattern:'solid',fgColor:{argb:'FF' + 'DCFCE7'}};
+    if(estado==='Parcial')  return {type:'pattern',pattern:'solid',fgColor:{argb:'FF' + 'FEF3C7'}};
+    return {type:'pattern',pattern:'solid',fgColor:{argb:'FF' + 'FEE2E2'}};
+  }
+  function estFont(estado){
+    if(estado==='Pagado')  return {bold:true,color:{argb:'FF'+COLOR_GRN}};
+    if(estado==='Parcial') return {bold:true,color:{argb:'FF92400E'}};
+    return {bold:true,color:{argb:'FF'+COLOR_RED}};
+  }
+  function hdStyle(ws, row){
+    row.eachCell(function(cell){
+      cell.fill  = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+COLOR_HD}};
+      cell.font  = {bold:true,color:{argb:'FFFFFFFF'},size:10};
+      cell.alignment = {horizontal:'center',vertical:'middle',wrapText:true};
+      cell.border = {bottom:{style:'medium',color:{argb:'FF'+COLOR_ACC}}};
+    });
+    row.height = 22;
+  }
+  function moneyFmt(cell, val){
+    cell.value = val||0;
+    cell.numFmt = '#,##0';
+    cell.alignment = {horizontal:'right'};
   }
 
-  // Hoja 1: Ventas
-  hoja('VENTAS', ['Fecha','Hora','Remision','Cliente','CC_NIT','Obra','Placa','Destino','Material','Cantidad','Precio','Subtotal','IVA','Total','FormaPago','Estado','TotalPagado','Saldo','Usuario','Obs'],
-    movimientos.filter(function(m){ return m.tipo==='VENTA'; }).map(function(v){
-      var mat=getMat(v.matId); var sub=v.cant*v.precio; var saldo=v.total-(v.totalPagado||0);
-      return [v.fecha,v.hora||'',v.remision,v.clienteNombre,v.cedula||'',v.obra||'',v.placa||'',v.destino||'',
-        mat?mat.nombre:v.matId,v.cant,v.precio,sub,v.iva||0,v.total,v.fpago,v.estado||'',v.totalPagado||0,saldo,v.usuario||'',v.obs||''];
-    })
-  );
+  // ── HOJA 1: RESUMEN POR CLIENTE ─────────────────────────
+  var ws1 = workbook.addWorksheet('📋 Clientes', {views:[{state:'frozen',ySplit:3}]});
+  ws1.mergeCells('A1:I1');
+  var t1 = ws1.getCell('A1');
+  t1.value = 'BROUS INVESTMENTS SAS — RESUMEN POR CLIENTE — '+today();
+  t1.font  = {bold:true,size:13,color:{argb:'FF'+COLOR_ACC}};
+  t1.fill  = {type:'pattern',pattern:'solid',fgColor:{argb:'FF'+COLOR_HD}};
+  t1.alignment = {horizontal:'center',vertical:'middle'};
+  ws1.getRow(1).height = 28;
 
-  // Hoja 2: Ingresos
-  hoja('INGRESOS', ['Fecha','Hora','Material','Cantidad','Proveedor','Obs','Usuario'],
-    movimientos.filter(function(m){ return m.tipo==='INGRESO'; }).map(function(i){
-      var mat=getMat(i.matId);
-      return [i.fecha,i.hora||'',mat?mat.nombre:i.matId,i.cant,i.clienteNombre||'',i.obs||'',i.usuario||''];
-    })
-  );
+  var hdrs1 = ['Cliente','NIT / CC','Teléfono','Ciudad','Despachos','m³ Total','Facturado','Pagado','Saldo'];
+  var cols1 = [30,16,14,16,11,11,16,16,16];
+  ws1.getRow(2).values = ['','','','','','','','',''];
+  var hr1 = ws1.getRow(3);
+  hr1.values = hdrs1;
+  hdStyle(ws1, hr1);
+  cols1.forEach(function(w,i){ ws1.getColumn(i+1).width = w; });
 
-  // Hoja 3: Clientes
-  hoja('CLIENTES', ['Nombre','CC_NIT','Telefono','Direccion','Email','Obra'],
-    clientes.map(function(c){ return [c.nombre,c.nit||'',c.tel||'',c.dir||'',c.email||'',c.obra||'']; })
-  );
+  var rowIdx1 = 4;
+  clientes.forEach(function(c){
+    var cvs   = movimientos.filter(function(m){ return m.tipo==='VENTA'&&m.clienteNombre===c.nombre; });
+    var fact  = cvs.reduce(function(a,b){ return a+b.total; },0);
+    var pag   = cvs.reduce(function(a,b){ return a+(b.totalPagado||0); },0);
+    var cant  = cvs.reduce(function(a,b){ return a+b.cant; },0);
+    var saldo = fact-pag;
+    var row   = ws1.addRow([c.nombre,c.nit||'',c.tel||'',c.dir||'',cvs.length,cant,fact,pag,saldo]);
+    row.getCell(7).numFmt='#,##0'; row.getCell(7).alignment={horizontal:'right'};
+    row.getCell(8).numFmt='#,##0'; row.getCell(8).alignment={horizontal:'right'};
+    var sc = row.getCell(9);
+    sc.value=saldo; sc.numFmt='#,##0'; sc.alignment={horizontal:'right'};
+    sc.font={bold:true,color:{argb:'FF'+(saldo>0?COLOR_RED:COLOR_GRN)}};
+    if(rowIdx1%2===0) row.eachCell(function(cell){
+      if(!cell.fill||cell.fill.fgColor===undefined)
+        cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8F8F8'}};
+    });
+    rowIdx1++;
+  });
+  ws1.autoFilter = {from:{row:3,column:1},to:{row:3,column:9}};
 
-  // Hoja 4: Materiales + Stock
-  hoja('MATERIALES', ['Nombre','Unidad','Precio','Stock_Min','Stock_Actual'],
-    materiales.map(function(m){ return [m.nombre,m.unidad,m.precio,m.min||0,getStock(m.id||m._id)]; })
-  );
+  // ── HOJA 2: TODAS LAS VENTAS ─────────────────────────────
+  var ws2 = workbook.addWorksheet('📄 Ventas', {views:[{state:'frozen',ySplit:3}]});
+  ws2.mergeCells('A1:R1');
+  var t2 = ws2.getCell('A1');
+  t2.value='BROUS INVESTMENTS SAS — TODAS LAS VENTAS — '+today();
+  t2.font={bold:true,size:13,color:{argb:'FF'+COLOR_ACC}};
+  t2.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+COLOR_HD}};
+  t2.alignment={horizontal:'center',vertical:'middle'};
+  ws2.getRow(1).height=28;
 
-  // Hoja 5: Log Actividad
-  hoja('ACTIVIDAD', ['Fecha','Hora','Usuario','Rol','Tipo','Detalle','Valor'],
-    logActividad.map(function(l){ return [l.fecha,l.hora||'',l.usuario,l.rol||'',l.tipo,l.detalle||'',l.valor||0]; })
-  );
+  var hdrs2=['Fecha','Hora','Remisión','Cliente','NIT/CC','Obra','Placa','Destino','Material','Cantidad','Precio','Subtotal','IVA','Total','Forma Pago','Estado','Pagado','Saldo'];
+  var cols2=[12,8,14,24,14,14,10,14,18,9,12,14,12,14,14,11,14,14];
+  ws2.getRow(2).values=Array(hdrs2.length).fill('');
+  var hr2=ws2.getRow(3); hr2.values=hdrs2; hdStyle(ws2,hr2);
+  cols2.forEach(function(w,i){ ws2.getColumn(i+1).width=w; });
 
-  var csv   = wb.join('\r\n');
-  var blob  = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
-  var url   = URL.createObjectURL(blob);
-  var a     = document.createElement('a');
-  a.href    = url;
-  a.download= 'BACKUP_MinaArrecife_'+today()+'.csv';
-  a.click();
+  var ventas=movimientos.filter(function(m){ return m.tipo==='VENTA'; })
+    .sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+  ventas.forEach(function(v,idx){
+    var mat=getMat(v.matId); var sub=v.cant*v.precio; var saldo=v.total-(v.totalPagado||0);
+    var row=ws2.addRow([v.fecha,v.hora||'',v.remision,v.clienteNombre,v.cedula||'',
+      v.obra||'',v.placa||'',v.destino||'',mat?mat.nombre:v.matId,
+      v.cant,v.precio,sub,v.iva||0,v.total,v.fpago,v.estado||'',v.totalPagado||0,saldo]);
+    [11,12,13,14,17].forEach(function(ci){ row.getCell(ci).numFmt='#,##0'; row.getCell(ci).alignment={horizontal:'right'}; });
+    var ec=row.getCell(16); ec.fill=estFill(v.estado); ec.font=estFont(v.estado); ec.alignment={horizontal:'center'};
+    var sc2=row.getCell(18); sc2.numFmt='#,##0'; sc2.alignment={horizontal:'right'};
+    sc2.font={bold:saldo>0,color:{argb:'FF'+(saldo>0?COLOR_RED:COLOR_GRN)}};
+    if(idx%2===0) [1,2,3,4,5,6,7,8,9,10].forEach(function(ci){
+      var cell=row.getCell(ci);
+      if(!cell.fill||!cell.fill.fgColor) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8F9FA'}};
+    });
+  });
+  ws2.autoFilter={from:{row:3,column:1},to:{row:3,column:18}};
+
+  // ── HOJA POR CADA CLIENTE ────────────────────────────────
+  clientes.forEach(function(c){
+    var cvs=movimientos.filter(function(m){ return m.tipo==='VENTA'&&m.clienteNombre===c.nombre; })
+      .sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+    if(!cvs.length) return;
+    var shName=(c.nombre||'Cliente').substring(0,28).replace(/[\\\/\*\?\[\]:]/g,'');
+    var ws=workbook.addWorksheet('👤 '+shName, {views:[{state:'frozen',ySplit:4}]});
+
+    ws.mergeCells('A1:K1');
+    var tc=ws.getCell('A1');
+    tc.value='CLIENTE: '+c.nombre.toUpperCase()+(c.nit?' | NIT: '+c.nit:'')+(c.tel?' | Tel: '+c.tel:'');
+    tc.font={bold:true,size:12,color:{argb:'FF'+COLOR_ACC}};
+    tc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+COLOR_HD}};
+    tc.alignment={horizontal:'left',vertical:'middle'};
+    ws.getRow(1).height=26;
+
+    // KPIs fila 2
+    var fact=cvs.reduce(function(a,b){return a+b.total;},0);
+    var pag=cvs.reduce(function(a,b){return a+(b.totalPagado||0);},0);
+    var saldo=fact-pag;
+    ws.mergeCells('A2:C2'); ws.getCell('A2').value='Despachos: '+cvs.length;
+    ws.mergeCells('D2:F2'); ws.getCell('D2').value='Facturado: $'+fact.toLocaleString('es-CO');
+    ws.mergeCells('G2:I2'); ws.getCell('G2').value='Pagado: $'+pag.toLocaleString('es-CO');
+    ws.mergeCells('J2:K2'); ws.getCell('J2').value='Saldo: $'+saldo.toLocaleString('es-CO');
+    [ws.getCell('A2'),ws.getCell('D2'),ws.getCell('G2'),ws.getCell('J2')].forEach(function(cell){
+      cell.font={bold:true,size:10}; cell.alignment={horizontal:'center',vertical:'middle'};
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F4FD'}};
+    });
+    ws.getCell('J2').font={bold:true,size:10,color:{argb:'FF'+(saldo>0?COLOR_RED:COLOR_GRN)}};
+    ws.getRow(2).height=20;
+
+    var hdrsCli=['Fecha','Hora','Remisión','Material','Cantidad','Precio','Subtotal','IVA','Total','Estado','Saldo'];
+    var colsCli=[12,8,14,20,9,13,13,12,13,11,13];
+    ws.getRow(3).values=Array(hdrsCli.length).fill('');
+    var hrC=ws.getRow(4); hrC.values=hdrsCli; hdStyle(ws,hrC);
+    colsCli.forEach(function(w,i){ ws.getColumn(i+1).width=w; });
+
+    cvs.forEach(function(v,idx){
+      var mat=getMat(v.matId); var sub=v.cant*v.precio; var sl=v.total-(v.totalPagado||0);
+      var row=ws.addRow([v.fecha,v.hora||'',v.remision,mat?mat.nombre:v.matId,
+        v.cant,v.precio,sub,v.iva||0,v.total,v.estado||'',sl]);
+      [6,7,8,9,11].forEach(function(ci){ row.getCell(ci).numFmt='#,##0'; row.getCell(ci).alignment={horizontal:'right'}; });
+      var ec=row.getCell(10); ec.fill=estFill(v.estado); ec.font=estFont(v.estado); ec.alignment={horizontal:'center'};
+      var sc3=row.getCell(11); sc3.numFmt='#,##0'; sc3.alignment={horizontal:'right'};
+      sc3.font={bold:sl>0,color:{argb:'FF'+(sl>0?COLOR_RED:COLOR_GRN)}};
+      if(idx%2===0) row.eachCell(function(cell){
+        if(!cell.fill||!cell.fill.fgColor) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8F9FA'}};
+      });
+    });
+    ws.autoFilter={from:{row:4,column:1},to:{row:4,column:11}};
+
+    // Fila totales
+    var totRow=ws.addRow(['','','TOTALES','','','',' ','',fact,'',saldo]);
+    totRow.getCell(3).font={bold:true}; totRow.getCell(3).alignment={horizontal:'right'};
+    [9,11].forEach(function(ci){ totRow.getCell(ci).numFmt='#,##0'; totRow.getCell(ci).alignment={horizontal:'right'}; totRow.getCell(ci).font={bold:true}; });
+    totRow.eachCell(function(cell){ cell.border={top:{style:'medium',color:{argb:'FF'+COLOR_HD}}}; });
+  });
+
+  // ── HOJA 3: CARTERA ─────────────────────────────────────
+  var ws3=workbook.addWorksheet('💰 Cartera', {views:[{state:'frozen',ySplit:3}]});
+  ws3.mergeCells('A1:G1');
+  var t3=ws3.getCell('A1');
+  t3.value='BROUS INVESTMENTS SAS — CARTERA — '+today();
+  t3.font={bold:true,size:13,color:{argb:'FF'+COLOR_ACC}};
+  t3.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+COLOR_HD}};
+  t3.alignment={horizontal:'center',vertical:'middle'};
+  ws3.getRow(1).height=28;
+  var hdrs3=['Cliente','NIT','Teléfono','Despachos','Total Facturado','Total Pagado','Saldo Pendiente'];
+  var cols3=[30,16,14,11,17,17,17];
+  ws3.getRow(2).values=Array(7).fill('');
+  var hr3=ws3.getRow(3); hr3.values=hdrs3; hdStyle(ws3,hr3);
+  cols3.forEach(function(w,i){ ws3.getColumn(i+1).width=w; });
+  var carteraData=clientes.map(function(c){
+    var cvs2=movimientos.filter(function(m){ return m.tipo==='VENTA'&&m.clienteNombre===c.nombre; });
+    var f2=cvs2.reduce(function(a,b){return a+b.total;},0);
+    var p2=cvs2.reduce(function(a,b){return a+(b.totalPagado||0);},0);
+    return {nombre:c.nombre,nit:c.nit||'',tel:c.tel||'',count:cvs2.length,fact:f2,pag:p2,saldo:f2-p2};
+  }).sort(function(a,b){ return b.saldo-a.saldo; });
+  carteraData.forEach(function(d,idx){
+    var row=ws3.addRow([d.nombre,d.nit,d.tel,d.count,d.fact,d.pag,d.saldo]);
+    [5,6,7].forEach(function(ci){ row.getCell(ci).numFmt='#,##0'; row.getCell(ci).alignment={horizontal:'right'}; });
+    var sc4=row.getCell(7); sc4.font={bold:true,color:{argb:'FF'+(d.saldo>0?COLOR_RED:COLOR_GRN)}};
+    if(idx%2===0) row.eachCell(function(cell){
+      if(!cell.fill||!cell.fill.fgColor) cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8F8F8'}};
+    });
+  });
+  ws3.autoFilter={from:{row:3,column:1},to:{row:3,column:7}};
+
+  // ── HOJA 4: MATERIALES ───────────────────────────────────
+  var ws4=workbook.addWorksheet('🪨 Materiales');
+  ws4.mergeCells('A1:F1');
+  var t4=ws4.getCell('A1');
+  t4.value='BROUS INVESTMENTS SAS — MATERIALES Y STOCK — '+today();
+  t4.font={bold:true,size:13,color:{argb:'FF'+COLOR_ACC}};
+  t4.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF'+COLOR_HD}};
+  t4.alignment={horizontal:'center',vertical:'middle'};
+  ws4.getRow(1).height=28;
+  var hdrs4=['Material','Categoría','Precio ($/m³)','Stock Mínimo','Stock Actual','Estado'];
+  var cols4=[28,16,15,13,13,12];
+  var hr4=ws4.getRow(2); hr4.values=hdrs4; hdStyle(ws4,hr4);
+  cols4.forEach(function(w,i){ ws4.getColumn(i+1).width=w; });
+  materiales.forEach(function(m){
+    var stock=getStock(m.id||m._id);
+    var min=m.min||0;
+    var estado=stock<=0?'Sin stock':stock<=min?'Stock bajo':'OK';
+    var row=ws4.addRow([m.nombre,m.cat||'',m.precio,min,stock,estado]);
+    row.getCell(3).numFmt='#,##0'; row.getCell(3).alignment={horizontal:'right'};
+    [4,5].forEach(function(ci){ row.getCell(ci).alignment={horizontal:'center'}; });
+    var ec=row.getCell(6);
+    ec.alignment={horizontal:'center'};
+    if(estado==='OK'){ec.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFDCFCE7'}};ec.font={bold:true,color:{argb:'FF'+COLOR_GRN}};}
+    else if(estado==='Stock bajo'){ec.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFEF3C7'}};ec.font={bold:true,color:{argb:'FF92400E'}};}
+    else{ec.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFEE2E2'}};ec.font={bold:true,color:{argb:'FF'+COLOR_RED}};}
+  });
+
+  // ── DESCARGAR ────────────────────────────────────────────
+  var buf=await workbook.xlsx.writeBuffer();
+  var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download='BACKUP_MinaArrecife_'+today()+'.xlsx'; a.click();
   URL.revokeObjectURL(url);
-  showToast('✅ Backup descargado correctamente');
+  showToast('✅ Backup Excel descargado correctamente');
 
-  // Registrar en log
-  var logEntry = { usuario:CU.user, rol:CU.role, tipo:'BACKUP', fecha:today(),
+  var logEntry={usuario:CU.user,rol:CU.role,tipo:'BACKUP',fecha:today(),
     hora:(function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x;}; return p(n.getHours())+':'+p(n.getMinutes()); })(),
-    detalle:'Backup completo descargado', valor:0 };
+    detalle:'Backup Excel completo descargado',valor:0};
   logActividad.push(logEntry);
   fbUpdate('logActividad','log_'+Date.now(),logEntry);
 }
@@ -2199,10 +2404,50 @@ function renderMateriales(){
   if(!ok) return;
   document.getElementById('tbl-mats').innerHTML = materiales.map(function(m){
     var mid = m._id||m.id;
-    return '<tr><td><span class="badge b-grey">'+(m.id||'—')+'</span></td><td><b>'+m.nombre+'</b></td>'+
-      '<td>'+m.cat+'</td><td>'+m.unidad+'</td><td>'+fmt(m.precio)+'</td><td>'+fmt(m.precio*(1+IVA))+'</td>'+
-      '<td>'+m.min+'</td><td><button class="btn btn-danger btn-sm" onclick="delMaterial(\''+mid+'\')">Eliminar</button></td></tr>';
+    return '<tr>'+
+      '<td><span class="badge b-grey">'+(m.id||'—')+'</span></td>'+
+      '<td><b>'+m.nombre+'</b></td>'+
+      '<td>'+m.cat+'</td>'+
+      '<td>'+m.unidad+'</td>'+
+      '<td style="text-align:right;font-weight:700;color:var(--gold);">'+fmt(m.precio)+'</td>'+
+      '<td style="text-align:right;">'+fmt(m.precio*(1+IVA))+'</td>'+
+      '<td style="text-align:center;">'+m.min+'</td>'+
+      '<td style="white-space:nowrap;">'+
+        '<button onclick="abrirEditMat(\''+mid+'\')" style="background:var(--accent);color:#000;border:none;padding:5px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px;">✏️ Editar</button>'+
+        '<button class="btn btn-danger btn-sm" onclick="delMaterial(\''+mid+'\')">Eliminar</button>'+
+      '</td>'+
+    '</tr>';
   }).join('') || '<tr class="empty-row"><td colspan="8">Sin materiales</td></tr>';
+}
+
+var _editMatId = null;
+function abrirEditMat(id){
+  var m = materiales.find(function(x){ return (x._id||x.id)===id; });
+  if(!m) return;
+  _editMatId = id;
+  document.getElementById('edit-mat-nombre').textContent = m.nombre.toUpperCase();
+  document.getElementById('edit-mat-precio').value = m.precio;
+  document.getElementById('edit-mat-min').value   = m.min||0;
+  var modal = document.getElementById('modal-edit-mat');
+  modal.style.display = 'flex';
+  setTimeout(function(){ document.getElementById('edit-mat-precio').focus(); document.getElementById('edit-mat-precio').select(); },100);
+}
+function cerrarEditMat(){
+  document.getElementById('modal-edit-mat').style.display='none';
+  _editMatId = null;
+}
+async function guardarEditMat(){
+  if(!_editMatId) return;
+  var precio = +document.getElementById('edit-mat-precio').value;
+  var min    = +document.getElementById('edit-mat-min').value;
+  if(!precio||precio<=0){ alert('El precio debe ser mayor a 0'); return; }
+  await fbUpdate('materiales', _editMatId, {precio:precio, min:min});
+  var m = materiales.find(function(x){ return (x._id||x.id)===_editMatId; });
+  if(m){ m.precio=precio; m.min=min; }
+  cerrarEditMat();
+  renderMateriales();
+  fillSelects();
+  showToast('✅ Material actualizado correctamente');
 }
 async function addMaterial(){
   var nombre = document.getElementById('m-nombre').value.trim();
@@ -2223,8 +2468,11 @@ async function delMaterial(id){
   await fbDel('materiales', id);
   fillSelects();
 }
-window.addMaterial = addMaterial;
-window.delMaterial = delMaterial;
+window.addMaterial  = addMaterial;
+window.delMaterial  = delMaterial;
+window.abrirEditMat  = abrirEditMat;
+window.cerrarEditMat = cerrarEditMat;
+window.guardarEditMat= guardarEditMat;
 
 // ======================================================
 // ACTIVIDAD
