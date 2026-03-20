@@ -2683,90 +2683,103 @@ function printRemision(movId){
   var meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
   var partes = (m.fecha||'').split('-');
   var fechaStr = partes.length===3 ? meses[parseInt(partes[1])-1]+' '+partes[2]+' DE '+partes[0] : m.fecha;
+
   var tipoRem = 'REMISION';
   if(m.fpago==='Efectivo')           tipoRem='REMISION EFECTIVO';
   else if(m.fpago==='Credito')       tipoRem='REMISION CREDITO';
   else if(m.fpago==='Donacion')      tipoRem='REMISION DONACION';
   else if(m.fpago==='Transferencia') tipoRem='REMISION TRANSFERENCIA';
 
-  // Construir filas de ítems — soporta formato legacy (1 ítem) y nuevo (items[])
+  // Items - soporta legacy (1 item) y nuevo (items[])
   var items = m.items && m.items.length ? m.items : [{matId:m.matId, cant:m.cant, precio:m.precio}];
   var sub = items.reduce(function(a,i){ return a+i.cant*i.precio; },0);
-  var filasItems = items.map(function(it){
+
+  var filasItems = items.map(function(it, idx){
     var mat = getMat(it.matId);
-    return '<tr><td>'+(mat?mat.nombre:it.matId||'').toUpperCase()+'</td><td style="text-align:center">'+fmtN(it.cant)+'</td><td style="text-align:right">'+fmt(it.cant*it.precio)+'</td></tr>';
+    var nom = (mat?mat.nombre:it.matId||'').toUpperCase();
+    var cant = it.cant;
+    var cantStr = (cant % 1 === 0) ? String(Math.round(cant)) : cant.toFixed(1);
+    var valor = Math.round(cant * it.precio);
+    var sep = idx>0 ? 'border-top:1px dashed #ccc;' : '';
+    return '<tr>'+
+      '<td style="padding:3px 2px;font-size:11px;'+sep+'">'+nom+'</td>'+
+      '<td style="padding:3px 2px;font-size:11px;text-align:center;'+sep+'">'+cantStr+'</td>'+
+      '<td style="padding:3px 2px;font-size:11px;text-align:right;'+sep+'">$ '+valor.toLocaleString('es-CO')+'</td>'+
+    '</tr>';
   }).join('');
 
-  // Bloque de una copia
   function copia(label){
     return '<div class="copia">'+
-      '<div class="emp"><b>BROUS INVESTMENTS SAS</b><span>NIT: 901.471.724-2</span><span>VEREDA PTO TEMBLEQUE</span><span>Movil: 3214528140</span></div>'+
-      '<div class="tipo">'+tipoRem+' '+m.remision+'</div>'+
-      '<hr class="sep">'+
-      '<div class="fila"><b>FECHA:</b><span>'+fechaStr+(m.hora?' '+m.hora:'')+'</span></div>'+
-      '<div class="fila"><b>CLIENTE:</b><span>'+(m.clienteNombre||'ANONIMO').toUpperCase()+'</span></div>'+
-      (m.cedula?'<div class="fila"><b>CC/NIT:</b><span>'+m.cedula+'</span></div>':'')+
-      (m.obra?'<div class="fila"><b>OBRA:</b><span>'+m.obra.toUpperCase()+'</span></div>':'')+
-      (m.placa?'<div class="fila"><b>PLACA-COND:</b><span>'+m.placa.toUpperCase()+'</span></div>':'')+
-      (m.transporte?'<div class="fila"><b>TRANSPORTE:</b><span>'+m.transporte.toUpperCase()+'</span></div>':'')+
-      (m.destino?'<div class="fila"><b>DESTINO:</b><span>'+m.destino.toUpperCase()+'</span></div>':'')+
-      '<hr class="sep">'+
-      '<table><thead><tr><th>DETALLE</th><th style="text-align:center">CANT.</th><th style="text-align:right">VALOR</th></tr></thead>'+
-      '<tbody>'+filasItems+'</tbody></table>'+
-      (m.iva>0?'<div class="sub-row"><span>Subtotal:</span><span>'+fmt(sub)+'</span></div><div class="sub-row"><span>IVA (19%):</span><span>'+fmt(m.iva)+'</span></div>':'')+
-      '<div class="total-row"><span>TOTAL A PAGAR:</span><span>'+fmt(m.total)+'</span></div>'+
-      '<hr class="sep">'+
-      '<div class="fpago">Forma de pago: <b>'+m.fpago+'</b>'+(m.codigo?' &nbsp;|&nbsp; Ref: <b>'+m.codigo+'</b>':'')+' </div>'+
-      (m.obs?'<div class="fpago">Obs: <i>'+m.obs+'</i></div>':'')+
-      '<div class="firmas">'+
-        '<div class="fb"><div class="fl"></div>Firma Conductor</div>'+
-        '<div class="fb"><div class="fl"></div>Firma Despacho</div>'+
+      // ENCABEZADO
+      '<div style="text-align:center;padding-bottom:4px;border-bottom:2px solid #000;margin-bottom:4px;">'+
+        '<b style="font-size:14px;display:block;font-weight:900;letter-spacing:0.5px;">BROUS INVESTMENTS SAS</b>'+
+        '<span style="font-size:10px;display:block;">NIT: 901.471.724-2</span>'+
+        '<span style="font-size:10px;display:block;">VEREDA PTO TEMBLEQUE</span>'+
+        '<span style="font-size:10px;display:block;">Movil: 3214528140</span>'+
       '</div>'+
-      '<div class="digitado">Digitado por: <b>'+(m.usuario||CU.label||'').toUpperCase()+'</b> &nbsp;|&nbsp; <b>'+label+'</b></div>'+
+      // TIPO REMISION
+      '<div style="text-align:center;font-size:12px;font-weight:900;padding:4px 0;border-bottom:2px solid #000;margin-bottom:5px;letter-spacing:0.5px;">'+
+        tipoRem+' '+m.remision+
+      '</div>'+
+      // DATOS
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:4px;">'+
+        '<tr><td style="font-size:10px;font-weight:900;padding:2px 0;width:85px;">FECHA:</td><td style="font-size:10px;padding:2px 0;">'+fechaStr+(m.hora?' '+m.hora:'')+'</td></tr>'+
+        '<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">CLIENTE:</td><td style="font-size:10px;padding:2px 0;">'+(m.clienteNombre||'ANONIMO').toUpperCase()+'</td></tr>'+
+        (m.cedula?'<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">CC/NIT:</td><td style="font-size:10px;padding:2px 0;">'+m.cedula+'</td></tr>':'')+
+        (m.obra?'<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">OBRA:</td><td style="font-size:10px;padding:2px 0;">'+m.obra.toUpperCase()+'</td></tr>':'')+
+        (m.placa?'<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">PLACA-COND:</td><td style="font-size:10px;padding:2px 0;">'+m.placa.toUpperCase()+'</td></tr>':'')+
+        (m.transporte?'<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">TRANSPORTE:</td><td style="font-size:10px;padding:2px 0;">'+m.transporte.toUpperCase()+'</td></tr>':'')+
+        (m.destino?'<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">DESTINO:</td><td style="font-size:10px;padding:2px 0;">'+m.destino.toUpperCase()+'</td></tr>':'')+
+      '</table>'+
+      // TABLA ITEMS
+      '<table style="width:100%;border-collapse:collapse;">'+
+        '<thead><tr>'+
+          '<th style="border-top:2px solid #000;border-bottom:2px solid #000;padding:3px 2px;font-size:10px;font-weight:900;text-align:left;">DETALLE</th>'+
+          '<th style="border-top:2px solid #000;border-bottom:2px solid #000;padding:3px 2px;font-size:10px;font-weight:900;text-align:center;">CANT.</th>'+
+          '<th style="border-top:2px solid #000;border-bottom:2px solid #000;padding:3px 2px;font-size:10px;font-weight:900;text-align:right;">VALOR</th>'+
+        '</tr></thead>'+
+        '<tbody>'+filasItems+'</tbody>'+
+      '</table>'+
+      // SUBTOTALES — mostrar si hay IVA o múltiples ítems
+      ((m.iva>0 || items.length>1)?
+        '<div style="display:flex;justify-content:space-between;font-size:10px;padding:2px 2px;border-top:1px dashed #000;margin-top:2px;"><span>Subtotal:</span><span>$ '+Math.round(sub).toLocaleString('es-CO')+'</span></div>'+
+        (m.iva>0?'<div style="display:flex;justify-content:space-between;font-size:10px;padding:2px 2px;"><span>IVA (19%):</span><span>$ '+Math.round(m.iva).toLocaleString('es-CO')+'</span></div>':'')
+      :'')+
+      // TOTAL
+      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:900;border-top:2px solid #000;border-bottom:1px dashed #000;padding:3px 2px;margin-top:2px;">'+
+        '<span>TOTAL A PAGAR:</span><span>$ '+Math.round(m.total).toLocaleString('es-CO')+'</span>'+
+      '</div>'+
+      // FORMA PAGO
+      '<div style="font-size:10px;padding:3px 2px;">Forma de pago: <b>'+m.fpago+'</b>'+(m.codigo?' &nbsp;|&nbsp; Ref: <b>'+m.codigo+'</b>':'')+' </div>'+
+      (m.obs?'<div style="font-size:10px;padding:2px;">Obs: <i>'+m.obs+'</i></div>':'')+
+      // FIRMAS
+      '<div style="display:flex;gap:6px;margin-top:10mm;">'+
+        '<div style="flex:1;text-align:center;font-size:10px;font-weight:700;"><div style="border-bottom:1.5px solid #000;height:12mm;margin-bottom:3px;"></div>Firma Conductor</div>'+
+        '<div style="flex:1;text-align:center;font-size:10px;font-weight:700;"><div style="border-bottom:1.5px solid #000;height:12mm;margin-bottom:3px;"></div>Firma Despacho</div>'+
+      '</div>'+
+      // DIGITADO
+      '<div style="font-size:9px;margin-top:3px;border-top:1px dashed #000;padding-top:3px;font-weight:700;">'+
+        'Digitado por: <b>'+(m.usuario||'').toUpperCase()+'</b> &nbsp;|&nbsp; <b>'+label+'</b>'+
+      '</div>'+
     '</div>';
   }
 
   var htmlStr = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
     '<style>'+
-    '@page{size:80mm auto;margin:0mm !important;}'+
-    '@page :first{margin-top:0mm !important;}'+
-    'html,body{margin:0!important;padding:0!important;font-family:Arial,sans-serif;font-size:11px;color:#000;width:80mm;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
-    '.copia{padding:1mm 2mm 2mm 2mm;width:76mm;page-break-after:always;margin:0!important;}'+
+    '@page{size:80mm auto;margin:0!important;}'+
+    'html,body{margin:0!important;padding:0!important;font-family:Arial,sans-serif;color:#000;width:80mm;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.copia{padding:2mm 2.5mm 3mm 2.5mm;width:75mm;page-break-after:always;}'+
     '.copia:last-child{page-break-after:avoid;}'+
-    '.emp{text-align:center;margin-bottom:3px;padding-bottom:3px;border-bottom:2px solid #000;}'+
-    '.emp b{font-size:13px;display:block;font-weight:900;letter-spacing:0.5px;}'+
-    '.emp span{font-size:10px;display:block;line-height:1.5;}'+
-    '.tipo{text-align:center;font-size:12px;font-weight:900;margin:3px 0 4px 0;letter-spacing:0.5px;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:3px 0;}'+
-    '.sep{border:none;border-top:1px dashed #000;margin:3px 0;}'+
-    '.fila{font-size:10px;margin:2px 0;display:flex;}'+
-    '.fila b{width:92px;flex-shrink:0;font-weight:900;margin-right:4px;}.fila span{flex:1;}'+
-    'table{width:100%;border-collapse:collapse;margin:3px 0;font-size:10px;}'+
-    'th{border-top:2px solid #000;border-bottom:2px solid #000;padding:3px 2px;font-size:10px;font-weight:900;text-align:left;}'+
-    'td{padding:3px 2px;font-size:10px;}'+
-    '.total-row{display:flex;justify-content:space-between;font-size:13px;font-weight:900;border-top:2px solid #000;padding-top:3px;margin-top:3px;}'+
-    '.sub-row{display:flex;justify-content:space-between;font-size:10px;margin:2px 0;}'+
-    '.fpago{font-size:10px;margin:3px 0;}'+
-    '.firmas{display:flex;gap:6px;margin-top:6mm;margin-bottom:0;}'+
-    '.fb{flex:1;text-align:center;font-size:9px;font-weight:700;}'+
-    '.fl{border-bottom:1.5px solid #000;height:11mm;margin-bottom:2px;}'+
-    '.digitado{font-size:9px;margin-top:3px;border-top:1px dashed #000;padding-top:3px;font-weight:700;}'+
-    '@media print{.no-print{display:none!important;}*{-webkit-print-color-adjust:exact;}}'+
+    '@media print{.no-print{display:none!important;}}'+
     '</style></head><body>'+
     copia('ORIGINAL — EMPRESA')+
     copia('COPIA 1 — CLIENTE')+
     copia('COPIA 2 — CONDUCTOR')+
     '<div class="no-print" style="text-align:center;padding:10px;display:flex;gap:8px;justify-content:center;">'+
-      '<button onclick="imprimirTermica()" style="background:#000;color:#fff;border:none;padding:8px 24px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 IMPRIMIR 3 COPIAS</button>'+
-      '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:8px 16px;font-size:12px;border-radius:4px;cursor:pointer;">Cerrar</button>'+
+      '<button onclick="imprimirTermica()" style="background:#000;color:#fff;border:none;padding:10px 28px;font-size:13px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 IMPRIMIR 3 COPIAS</button>'+
+      '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:10px 16px;font-size:13px;border-radius:4px;cursor:pointer;">Cerrar</button>'+
     '</div>'+
-    '<script>'+
-    'function imprimirTermica(){'+
-      'var style=document.createElement("style");'+
-      'style.textContent="@page{margin:0!important;size:80mm auto;}body{margin:0!important;padding:0!important;}";'+
-      'document.head.appendChild(style);'+
-      'setTimeout(function(){ window.print(); },100);'+
-    '}'+
-    '<\/script>'+
+    '<script>function imprimirTermica(){var s=document.createElement("style");s.textContent="@page{margin:0!important;size:80mm auto;}body{margin:0!important;padding:0!important;}";document.head.appendChild(s);setTimeout(function(){window.print();},150);}<\/script>'+
     '</body></html>';
 
   var win = window.open('','_blank','width=360,height=750,toolbar=0,menubar=0,location=0,scrollbars=1');
