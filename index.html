@@ -826,6 +826,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 </div>
 <div class="frow">
 <div class="fg"><label>Placa / Conductor</label><input type="text" id="v-placa" placeholder="Ej: 836AER"></div>
+<div class="fg"><label>Transportador</label><input type="text" id="v-transporte" placeholder="Nombre empresa o persona..."></div>
 <div class="fg"><label>Destino</label><input type="text" id="v-destino" placeholder="Ej: PALMERAS"></div>
 </div>
 <div class="fg" style="margin-bottom:14px;"><label>Observaciones</label><input type="text" id="v-obs" placeholder="Opcional..."></div>
@@ -1281,6 +1282,8 @@ function loadOfflineData(){
       {id:'M007',nombre:'Arena Triturada',cat:'Arena',unidad:'m3',precio:57000,min:5},
       {id:'M008',nombre:'Grava 1/2',cat:'Grava',unidad:'m3',precio:60000,min:3},
       {id:'M009',nombre:'Grava 3/4',cat:'Grava',unidad:'m3',precio:57000,min:3},
+      {id:'M011',nombre:'Mixto 1/2',cat:'Mixto',unidad:'m3',precio:57000,min:5},
+      {id:'M013',nombre:'Mixto 3/4',cat:'Mixto',unidad:'m3',precio:57000,min:5},
       {id:'A001',nombre:'MDC-25',cat:'Asfalto',unidad:'ton',precio:850000,min:1},
     ];
   }
@@ -2367,6 +2370,7 @@ async function regVenta(){
   var remision = document.getElementById('v-remision').value.trim();
   var obra   = document.getElementById('v-obra').value.trim();
   var placa  = document.getElementById('v-placa').value.trim();
+  var transporte = (document.getElementById('v-transporte')||{value:''}).value.trim();
   var destino= document.getElementById('v-destino').value.trim();
   var obs    = document.getElementById('v-obs').value.trim();
   var cedula = document.getElementById('v-cedula')?document.getElementById('v-cedula').value.trim():'';
@@ -2405,7 +2409,7 @@ async function regVenta(){
     items:items,
     fpago:fp, codigo:codigo,
     remision: remNum,
-    obra:obra, placa:placa, destino:destino, obs:obs, cedula:cedula,
+    obra:obra, placa:placa, transporte:transporte, destino:destino, obs:obs, cedula:cedula,
     estado:estado, usuario:CU.name, totalPagado:0
   };
   var ok = await fbAdd('movimientos', mov);
@@ -2423,7 +2427,7 @@ function clearVenta(){
   var el_f=document.getElementById('v-fecha'); if(el_f) el_f.value=now2.getFullYear()+'-'+pad2(now2.getMonth()+1)+'-'+pad2(now2.getDate());
   var el_h=document.getElementById('v-hora');  if(el_h) el_h.value=pad2(now2.getHours())+':'+pad2(now2.getMinutes());
   ['v-cliente','v-material','v-fpago'].forEach(function(id){ document.getElementById(id).value=''; });
-  ['v-nombre','v-cedula','v-cant','v-precio','v-codigo','v-obra','v-placa','v-destino','v-obs','v-cant2','v-precio2','v-cant3','v-precio3'].forEach(function(id){
+  ['v-nombre','v-cedula','v-cant','v-precio','v-codigo','v-obra','v-placa','v-transporte','v-destino','v-obs','v-cant2','v-precio2','v-cant3','v-precio3'].forEach(function(id){
     if(document.getElementById(id)) document.getElementById(id).value='';
   });
   document.getElementById('r-sub').textContent   = '$ 0';
@@ -2704,6 +2708,7 @@ function printRemision(movId){
       (m.cedula?'<div class="fila"><b>CC/NIT:</b><span>'+m.cedula+'</span></div>':'')+
       (m.obra?'<div class="fila"><b>OBRA:</b><span>'+m.obra.toUpperCase()+'</span></div>':'')+
       (m.placa?'<div class="fila"><b>PLACA-COND:</b><span>'+m.placa.toUpperCase()+'</span></div>':'')+
+      (m.transporte?'<div class="fila"><b>TRANSPORTE:</b><span>'+m.transporte.toUpperCase()+'</span></div>':'')+
       (m.destino?'<div class="fila"><b>DESTINO:</b><span>'+m.destino.toUpperCase()+'</span></div>':'')+
       '<hr class="sep">'+
       '<table><thead><tr><th>DETALLE</th><th style="text-align:center">CANT.</th><th style="text-align:right">VALOR</th></tr></thead>'+
@@ -2725,24 +2730,24 @@ function printRemision(movId){
     '<style>'+
     '@page{size:80mm auto;margin:0;}'+
     'html,body{margin:0;padding:0;font-family:Arial,sans-serif;font-size:10px;color:#000;width:80mm;}'+
-    '.copia{padding:2mm 3mm;width:74mm;page-break-after:always;}'+
+    '.copia{padding:1.5mm 2.5mm;width:75mm;page-break-after:always;}'+
     '.copia:last-child{page-break-after:avoid;}'+
-    '.emp{text-align:center;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #000;}'+
+    '.emp{text-align:center;margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid #000;}'+
     '.emp b{font-size:12px;display:block;font-weight:900;}'+
-    '.emp span{font-size:9px;display:block;line-height:1.5;}'+
-    '.tipo{text-align:center;font-size:11px;font-weight:900;margin:4px 0;letter-spacing:0.5px;}'+
-    '.sep{border:none;border-top:1px dashed #000;margin:3px 0;}'+
-    '.fila{font-size:9px;margin:2px 0;display:flex;}'+
-    '.fila b{width:90px;flex-shrink:0;font-weight:700;}.fila span{flex:1;}'+
-    'table{width:100%;border-collapse:collapse;margin:3px 0;font-size:9px;}'+
+    '.emp span{font-size:9px;display:block;line-height:1.4;}'+
+    '.tipo{text-align:center;font-size:11px;font-weight:900;margin:3px 0;letter-spacing:0.5px;}'+
+    '.sep{border:none;border-top:1px dashed #000;margin:2px 0;}'+
+    '.fila{font-size:9px;margin:1.5px 0;display:flex;}'+
+    '.fila b{width:88px;flex-shrink:0;font-weight:700;}.fila span{flex:1;}'+
+    'table{width:100%;border-collapse:collapse;margin:2px 0;font-size:9px;}'+
     'th{border-top:1px solid #000;border-bottom:1px solid #000;padding:2px 1px;font-size:9px;text-align:left;}'+
     'td{padding:2px 1px;}'+
-    '.total-row{display:flex;justify-content:space-between;font-size:11px;font-weight:900;border-top:1px solid #000;padding-top:3px;margin-top:2px;}'+
+    '.total-row{display:flex;justify-content:space-between;font-size:11px;font-weight:900;border-top:1px solid #000;padding-top:2px;margin-top:2px;}'+
     '.sub-row{display:flex;justify-content:space-between;font-size:9px;margin:1px 0;}'+
-    '.firmas{display:flex;gap:6px;margin-top:8mm;}'+
+    '.firmas{display:flex;gap:4px;margin-top:5mm;margin-bottom:1mm;}'+
     '.fb{flex:1;text-align:center;font-size:8px;}'+
-    '.fl{border-bottom:1px solid #000;height:12mm;margin-bottom:2px;}'+
-    '.digitado{font-size:8px;margin-top:4px;border-top:1px dashed #000;padding-top:3px;}'+
+    '.fl{border-bottom:1px solid #000;height:10mm;margin-bottom:2px;}'+
+    '.digitado{font-size:8px;margin-top:2px;border-top:1px dashed #000;padding-top:2px;}'+
     '@media print{.no-print{display:none!important;}}'+
     '</style></head><body>'+
     copia('ORIGINAL — EMPRESA')+
