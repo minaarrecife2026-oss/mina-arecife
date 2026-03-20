@@ -757,15 +757,52 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <input type="text" id="v-cedula" placeholder="Ej: 12345678">
 </div>
 </div>
+
+<!-- ÍTEM 1 -->
+<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;">
+<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">📦 Ítem 1 *</div>
 <div class="frow">
 <div class="fg"><label>Material *</label>
-<select id="v-material" onchange="fillVentaPrec()"><option value="">— Selecciona —</option></select>
+<select id="v-material" onchange="fillVentaPrec(1)"><option value="">— Selecciona —</option></select>
 </div>
 <div class="fg"><label>Cantidad *</label>
 <input type="number" id="v-cant" min="0.1" step="0.1" placeholder="0" oninput="calcVenta()">
 </div>
 <div class="fg"><label>Precio Unitario *</label>
 <input type="number" id="v-precio" min="0" step="100" oninput="calcVenta()">
+</div>
+</div>
+</div>
+
+<!-- ÍTEM 2 -->
+<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;">
+<div style="font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">📦 Ítem 2 <span style="color:var(--text3);font-weight:400;">(opcional)</span></div>
+<div class="frow">
+<div class="fg"><label>Material</label>
+<select id="v-material2" onchange="fillVentaPrec(2)"><option value="">— Sin segundo ítem —</option></select>
+</div>
+<div class="fg"><label>Cantidad</label>
+<input type="number" id="v-cant2" min="0" step="0.1" placeholder="0" oninput="calcVenta()">
+</div>
+<div class="fg"><label>Precio Unitario</label>
+<input type="number" id="v-precio2" min="0" step="100" oninput="calcVenta()">
+</div>
+</div>
+</div>
+
+<!-- ÍTEM 3 -->
+<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;">
+<div style="font-size:11px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">📦 Ítem 3 <span style="color:var(--text3);font-weight:400;">(opcional)</span></div>
+<div class="frow">
+<div class="fg"><label>Material</label>
+<select id="v-material3" onchange="fillVentaPrec(3)"><option value="">— Sin tercer ítem —</option></select>
+</div>
+<div class="fg"><label>Cantidad</label>
+<input type="number" id="v-cant3" min="0" step="0.1" placeholder="0" oninput="calcVenta()">
+</div>
+<div class="fg"><label>Precio Unitario</label>
+<input type="number" id="v-precio3" min="0" step="100" oninput="calcVenta()">
+</div>
 </div>
 </div>
 <div class="fg" style="margin-bottom:14px;"><label>Forma de Pago *</label>
@@ -1213,7 +1250,8 @@ async function checkAndSeedData(){
       {id:'M008',nombre:'Grava 1/2',cat:'Grava',unidad:'m3',precio:60000,min:3},
       {id:'M009',nombre:'Grava 3/4',cat:'Grava',unidad:'m3',precio:57000,min:3},
       {id:'M010',nombre:'Grava 1 1/2',cat:'Grava',unidad:'m3',precio:57000,min:3},
-      {id:'M011',nombre:'Mixto',cat:'Mixto',unidad:'m3',precio:57000,min:5},
+      {id:'M011',nombre:'Mixto 1/2',cat:'Mixto',unidad:'m3',precio:57000,min:5},
+      {id:'M013',nombre:'Mixto 3/4',cat:'Mixto',unidad:'m3',precio:57000,min:5},
       {id:'M012',nombre:'Piedra Filtro',cat:'Piedra',unidad:'m3',precio:57000,min:3},
       {id:'A001',nombre:'MDC-25',cat:'Asfalto',unidad:'ton',precio:850000,min:1},
       {id:'A002',nombre:'MDC-19',cat:'Asfalto',unidad:'ton',precio:800000,min:1},
@@ -1415,6 +1453,10 @@ function fillSelects(){
     var el = document.getElementById(id);
     if(el) el.innerHTML = '<option value="">— Selecciona —</option>' + matOpts;
   });
+  var el2 = document.getElementById('v-material2');
+  if(el2) el2.innerHTML = '<option value="">— Sin segundo ítem —</option>' + matOpts;
+  var el3 = document.getElementById('v-material3');
+  if(el3) el3.innerHTML = '<option value="">— Sin tercer ítem —</option>' + matOpts;
   var cliOpts = '<option value="">— Anónimo —</option>' + clientes.map(function(c){
     return '<option value="'+(c.id||c._id)+'">'+c.nombre+'</option>';
   }).join('');
@@ -2268,10 +2310,13 @@ function fillClienteName(){
   document.getElementById('v-nombre').value = cli?cli.nombre:'';
   if(document.getElementById('v-cedula')) document.getElementById('v-cedula').value = cli?cli.nit:'';
 }
-function fillVentaPrec(){
-  var mid = document.getElementById('v-material').value;
+function fillVentaPrec(n){
+  n = n||1;
+  var sel = n===1?'v-material':n===2?'v-material2':'v-material3';
+  var prEl= n===1?'v-precio':n===2?'v-precio2':'v-precio3';
+  var mid = (document.getElementById(sel)||{value:''}).value;
   var mat = getMat(mid);
-  if(mat) document.getElementById('v-precio').value = mat.precio;
+  if(mat && document.getElementById(prEl)) document.getElementById(prEl).value = mat.precio;
   calcVenta();
 }
 function toggleCodigo(){
@@ -2293,12 +2338,13 @@ function setIva(conIva){
   calcVenta();
 }
 function calcVenta(){
-  var cant     = +document.getElementById('v-cant').value||0;
-  var precio   = +document.getElementById('v-precio').value||0;
-  var ivaRate  = +(document.getElementById('v-iva-check').value)||0;
-  var sub      = cant*precio;
-  var iva      = sub*ivaRate;
-  var total    = sub+iva;
+  var ivaRate = +(document.getElementById('v-iva-check').value)||0;
+  var c1=+document.getElementById('v-cant').value||0, p1=+document.getElementById('v-precio').value||0;
+  var c2=+(document.getElementById('v-cant2')||{value:0}).value||0, p2=+(document.getElementById('v-precio2')||{value:0}).value||0;
+  var c3=+(document.getElementById('v-cant3')||{value:0}).value||0, p3=+(document.getElementById('v-precio3')||{value:0}).value||0;
+  var sub = c1*p1 + c2*p2 + c3*p3;
+  var iva = sub*ivaRate;
+  var total = sub+iva;
   document.getElementById('r-sub').textContent       = fmt(sub);
   document.getElementById('r-iva').textContent       = fmt(iva);
   document.getElementById('r-iva-label').textContent = ivaRate>0?'IVA (19%)':'IVA (0%)';
@@ -2326,13 +2372,24 @@ async function regVenta(){
   var cedula = document.getElementById('v-cedula')?document.getElementById('v-cedula').value.trim():'';
   var err = document.getElementById('alrt-venta-err');
   if(!mid||!cant||!precio||!fp){
-    err.textContent = '⚠ Completa todos los campos obligatorios';
+    err.textContent = '⚠ Completa Material 1, Cantidad, Precio y Forma de Pago';
     err.style.display = 'block';
     setTimeout(function(){ err.style.display='none'; },3000);
     return;
   }
+  // Items 2 y 3
+  var mid2  = (document.getElementById('v-material2')||{value:''}).value;
+  var cant2 = +(document.getElementById('v-cant2')||{value:0}).value||0;
+  var precio2 = +(document.getElementById('v-precio2')||{value:0}).value||0;
+  var mid3  = (document.getElementById('v-material3')||{value:''}).value;
+  var cant3 = +(document.getElementById('v-cant3')||{value:0}).value||0;
+  var precio3 = +(document.getElementById('v-precio3')||{value:0}).value||0;
+  // Construir items array
+  var items = [{matId:mid, cant:cant, precio:precio}];
+  if(mid2 && cant2 && precio2) items.push({matId:mid2, cant:cant2, precio:precio2});
+  if(mid3 && cant3 && precio3) items.push({matId:mid3, cant:cant3, precio:precio3});
   var ivaRate = +(document.getElementById('v-iva-check').value)||0;
-  var sub   = cant*precio;
+  var sub   = items.reduce(function(a,i){ return a+i.cant*i.precio; },0);
   var iva   = sub*ivaRate;
   var total = sub+iva;
   var clienteNombre = nombre||(getCli(cid)?getCli(cid).nombre:'Anonimo');
@@ -2340,19 +2397,22 @@ async function regVenta(){
   var estado = (fp==='Credito'||fp.toLowerCase().includes('credit'))?'Pendiente':'Pagado';
   var d = document.getElementById('v-fecha').value || today();
   var h = document.getElementById('v-hora').value || hStr2();
+  var remNum = remision||('SAL-'+d.replace(/-/g,'')+h.replace(':',''));
   var mov = {
     fecha:d, hora:h, tipo:'VENTA',
     clienteId:cid, clienteNombre:clienteNombre,
     matId:mid, cant:cant, precio:precio, iva:iva, total:total,
+    items:items,
     fpago:fp, codigo:codigo,
-    remision: remision||('SAL-'+d.replace(/-/g,'')+h.replace(':','')),
+    remision: remNum,
     obra:obra, placa:placa, destino:destino, obs:obs, cedula:cedula,
     estado:estado, usuario:CU.name, totalPagado:0
   };
   var ok = await fbAdd('movimientos', mov);
   if(ok){
+    var mats = items.map(function(i){ return fmtN(i.cant)+' '+(getMat(i.matId)?getMat(i.matId).nombre:''); }).join(', ');
     fbAdd('logActividad',{fecha:d,hora:h,usuario:CU.name,rol:CU.role,tipo:'VENTA',
-      detalle:'Venta '+fmtN(cant)+' '+(getMat(mid)?getMat(mid).unidad:'')+' a '+clienteNombre+' ('+fp+')',
+      detalle:'Venta '+mats+' a '+clienteNombre+' ('+fp+')',
       matId:mid, valor:total});
     showAlert('alrt-venta');
     clearVenta();
@@ -2363,13 +2423,15 @@ function clearVenta(){
   var el_f=document.getElementById('v-fecha'); if(el_f) el_f.value=now2.getFullYear()+'-'+pad2(now2.getMonth()+1)+'-'+pad2(now2.getDate());
   var el_h=document.getElementById('v-hora');  if(el_h) el_h.value=pad2(now2.getHours())+':'+pad2(now2.getMinutes());
   ['v-cliente','v-material','v-fpago'].forEach(function(id){ document.getElementById(id).value=''; });
-  ['v-nombre','v-cedula','v-cant','v-precio','v-codigo','v-obra','v-placa','v-destino','v-obs'].forEach(function(id){
+  ['v-nombre','v-cedula','v-cant','v-precio','v-codigo','v-obra','v-placa','v-destino','v-obs','v-cant2','v-precio2','v-cant3','v-precio3'].forEach(function(id){
     if(document.getElementById(id)) document.getElementById(id).value='';
   });
   document.getElementById('r-sub').textContent   = '$ 0';
   document.getElementById('r-iva').textContent   = '$ 0';
   document.getElementById('r-total').textContent = '$ 0';
   document.getElementById('fg-codigo').style.display = 'none';
+  var s2=document.getElementById('v-material2'); if(s2) s2.value='';
+  var s3=document.getElementById('v-material3'); if(s3) s3.value='';
 }
 window.regVenta   = regVenta;
 window.clearVenta = clearVenta;
@@ -2613,53 +2675,86 @@ window.limpiarConsulta= limpiarConsulta;
 function printRemision(movId){
   var m = movimientos.find(function(x){ return (x._id||x.id)===movId||x._id===movId; });
   if(!m||m.tipo!=='VENTA'){ alert('Solo se pueden imprimir remisiones de ventas.'); return; }
-  var mat = getMat(m.matId);
+
   var meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
-  var partes = m.fecha.split('-');
-  var fechaStr = meses[parseInt(partes[1])-1]+' '+partes[2]+' DE '+partes[0];
+  var partes = (m.fecha||'').split('-');
+  var fechaStr = partes.length===3 ? meses[parseInt(partes[1])-1]+' '+partes[2]+' DE '+partes[0] : m.fecha;
   var tipoRem = 'REMISION';
-  if(m.fpago==='Efectivo')      tipoRem='REMISION EFECTIVO';
-  else if(m.fpago==='Credito')  tipoRem='REMISION CREDITO';
-  else if(m.fpago==='Donacion') tipoRem='REMISION DONACION';
+  if(m.fpago==='Efectivo')           tipoRem='REMISION EFECTIVO';
+  else if(m.fpago==='Credito')       tipoRem='REMISION CREDITO';
+  else if(m.fpago==='Donacion')      tipoRem='REMISION DONACION';
   else if(m.fpago==='Transferencia') tipoRem='REMISION TRANSFERENCIA';
-  var html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
-    '<style>@page{size:80mm auto;margin:0;}html,body{margin:0;padding:2mm 3mm;font-family:Arial,sans-serif;font-size:10px;color:#000;width:74mm;}'+
+
+  // Construir filas de ítems — soporta formato legacy (1 ítem) y nuevo (items[])
+  var items = m.items && m.items.length ? m.items : [{matId:m.matId, cant:m.cant, precio:m.precio}];
+  var sub = items.reduce(function(a,i){ return a+i.cant*i.precio; },0);
+  var filasItems = items.map(function(it){
+    var mat = getMat(it.matId);
+    return '<tr><td>'+(mat?mat.nombre:it.matId||'').toUpperCase()+'</td><td style="text-align:center">'+fmtN(it.cant)+'</td><td style="text-align:right">'+fmt(it.cant*it.precio)+'</td></tr>';
+  }).join('');
+
+  // Bloque de una copia
+  function copia(label){
+    return '<div class="copia">'+
+      '<div class="emp"><b>BROUS INVESTMENTS SAS</b><span>NIT: 901.471.724-2</span><span>VEREDA PTO TEMBLEQUE</span><span>Movil: 3214528140</span></div>'+
+      '<div class="tipo">'+tipoRem+' '+m.remision+'</div>'+
+      '<hr class="sep">'+
+      '<div class="fila"><b>FECHA:</b><span>'+fechaStr+(m.hora?' '+m.hora:'')+'</span></div>'+
+      '<div class="fila"><b>CLIENTE:</b><span>'+(m.clienteNombre||'ANONIMO').toUpperCase()+'</span></div>'+
+      (m.cedula?'<div class="fila"><b>CC/NIT:</b><span>'+m.cedula+'</span></div>':'')+
+      (m.obra?'<div class="fila"><b>OBRA:</b><span>'+m.obra.toUpperCase()+'</span></div>':'')+
+      (m.placa?'<div class="fila"><b>PLACA-COND:</b><span>'+m.placa.toUpperCase()+'</span></div>':'')+
+      (m.destino?'<div class="fila"><b>DESTINO:</b><span>'+m.destino.toUpperCase()+'</span></div>':'')+
+      '<hr class="sep">'+
+      '<table><thead><tr><th>DETALLE</th><th style="text-align:center">CANT.</th><th style="text-align:right">VALOR</th></tr></thead>'+
+      '<tbody>'+filasItems+'</tbody></table>'+
+      (m.iva>0?'<div class="sub-row"><span>Subtotal:</span><span>'+fmt(sub)+'</span></div><div class="sub-row"><span>IVA (19%):</span><span>'+fmt(m.iva)+'</span></div>':'')+
+      '<div class="total-row"><span>TOTAL A PAGAR:</span><span>'+fmt(m.total)+'</span></div>'+
+      '<hr class="sep">'+
+      '<div style="font-size:9px;margin:2px 0;">Forma de pago: <b>'+m.fpago+'</b>'+(m.codigo?' | Ref: <b>'+m.codigo+'</b>':'')+' </div>'+
+      (m.obs?'<div style="font-size:9px;margin:2px 0;">Obs: <i>'+m.obs+'</i></div>':'')+
+      '<div class="firmas">'+
+        '<div class="fb"><div class="fl"></div>Firma Conductor</div>'+
+        '<div class="fb"><div class="fl"></div>Firma Despacho</div>'+
+      '</div>'+
+      '<div class="digitado">Digitado por: <b>'+(m.usuario||CU.label||'').toUpperCase()+'</b> &nbsp;|&nbsp; <b>'+label+'</b></div>'+
+    '</div>';
+  }
+
+  var htmlStr = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<style>'+
+    '@page{size:80mm auto;margin:0;}'+
+    'html,body{margin:0;padding:0;font-family:Arial,sans-serif;font-size:10px;color:#000;width:80mm;}'+
+    '.copia{padding:2mm 3mm;width:74mm;page-break-after:always;}'+
+    '.copia:last-child{page-break-after:avoid;}'+
     '.emp{text-align:center;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid #000;}'+
-    '.emp b{font-size:12px;display:block;font-weight:900;}.emp span{font-size:9px;display:block;line-height:1.5;}'+
+    '.emp b{font-size:12px;display:block;font-weight:900;}'+
+    '.emp span{font-size:9px;display:block;line-height:1.5;}'+
     '.tipo{text-align:center;font-size:11px;font-weight:900;margin:4px 0;letter-spacing:0.5px;}'+
     '.sep{border:none;border-top:1px dashed #000;margin:3px 0;}'+
-    '.fila{font-size:9px;margin:2px 0;display:flex;}.fila b{width:90px;flex-shrink:0;font-weight:700;}.fila span{flex:1;}'+
+    '.fila{font-size:9px;margin:2px 0;display:flex;}'+
+    '.fila b{width:90px;flex-shrink:0;font-weight:700;}.fila span{flex:1;}'+
     'table{width:100%;border-collapse:collapse;margin:3px 0;font-size:9px;}'+
     'th{border-top:1px solid #000;border-bottom:1px solid #000;padding:2px 1px;font-size:9px;text-align:left;}'+
-    'th:last-child,td:last-child{text-align:right;}td{padding:2px 1px;}'+
+    'td{padding:2px 1px;}'+
     '.total-row{display:flex;justify-content:space-between;font-size:11px;font-weight:900;border-top:1px solid #000;padding-top:3px;margin-top:2px;}'+
     '.sub-row{display:flex;justify-content:space-between;font-size:9px;margin:1px 0;}'+
-    '.firmas{display:flex;gap:6px;margin-top:8mm;}.fb{flex:1;text-align:center;font-size:8px;}.fl{border-bottom:1px solid #000;height:12mm;margin-bottom:2px;}'+
+    '.firmas{display:flex;gap:6px;margin-top:8mm;}'+
+    '.fb{flex:1;text-align:center;font-size:8px;}'+
+    '.fl{border-bottom:1px solid #000;height:12mm;margin-bottom:2px;}'+
     '.digitado{font-size:8px;margin-top:4px;border-top:1px dashed #000;padding-top:3px;}'+
-    '@media print{.no-print{display:none!important;}}</style></head><body>'+
-    '<div class="emp"><b>BROUS INVESTMENTS SAS</b><span>NIT: 901.471.724-2</span><span>VEREDA PTO TEMBLEQUE</span><span>Movil: 3214528140</span></div>'+
-    '<div class="tipo">'+tipoRem+' '+m.remision+'</div><hr class="sep">'+
-    '<div class="fila"><b>FECHA:</b><span>'+fechaStr+' '+m.hora+'</span></div>'+
-    '<div class="fila"><b>CLIENTE:</b><span>'+(m.clienteNombre||'ANONIMO').toUpperCase()+'</span></div>'+
-    (m.cedula?'<div class="fila"><b>CC/NIT:</b><span>'+m.cedula+'</span></div>':'')+
-    (m.obra?'<div class="fila"><b>OBRA:</b><span>'+m.obra.toUpperCase()+'</span></div>':'')+
-    (m.placa?'<div class="fila"><b>PLACA-COND:</b><span>'+m.placa.toUpperCase()+'</span></div>':'')+
-    (m.destino?'<div class="fila"><b>DESTINO:</b><span>'+m.destino.toUpperCase()+'</span></div>':'')+
-    '<hr class="sep">'+
-    '<table><thead><tr><th>DETALLE</th><th>CANT.</th><th>VALOR</th></tr></thead>'+
-    '<tbody><tr><td>'+(mat?mat.nombre:m.matId).toUpperCase()+'</td><td>'+fmtN(m.cant)+'</td><td>'+fmt(m.cant*m.precio)+'</td></tr></tbody></table>'+
-    (m.iva>0?'<div class="sub-row"><span>Subtotal:</span><span>'+fmt(m.cant*m.precio)+'</span></div><div class="sub-row"><span>IVA (19%):</span><span>'+fmt(m.iva)+'</span></div>':'')+
-    '<div class="total-row"><span>TOTAL A PAGAR:</span><span>'+fmt(m.total)+'</span></div><hr class="sep">'+
-    '<div style="font-size:9px;margin:2px 0;">Forma de pago: <b>'+m.fpago+'</b>'+(m.codigo?' | Ref: <b>'+m.codigo+'</b>':'')+' </div>'+
-    (m.obs?'<div style="font-size:9px;margin:2px 0;">Obs: <i>'+m.obs+'</i></div>':'')+
-    '<div class="firmas"><div class="fb"><div class="fl"></div>Firma Conductor</div><div class="fb"><div class="fl"></div>Firma Despacho</div></div>'+
-    '<div class="digitado">Digitado por: <b>'+CU.label.toUpperCase()+'</b></div>'+
-    '<div class="no-print" style="text-align:center;margin-top:6mm;">'+
-      '<button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:8px 24px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 IMPRIMIR</button>'+
-      '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:8px 16px;font-size:12px;border-radius:4px;cursor:pointer;margin-left:6px;">Cerrar</button>'+
+    '@media print{.no-print{display:none!important;}}'+
+    '</style></head><body>'+
+    copia('ORIGINAL — EMPRESA')+
+    copia('COPIA 1 — CLIENTE')+
+    copia('COPIA 2 — CONDUCTOR')+
+    '<div class="no-print" style="text-align:center;padding:10px;display:flex;gap:8px;justify-content:center;">'+
+      '<button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:8px 24px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 IMPRIMIR 3 COPIAS</button>'+
+      '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:8px 16px;font-size:12px;border-radius:4px;cursor:pointer;">Cerrar</button>'+
     '</div></body></html>';
-  var win = window.open('','_blank','width=320,height=600,toolbar=0,menubar=0,location=0');
-  win.document.write(html);
+
+  var win = window.open('','_blank','width=340,height=700,toolbar=0,menubar=0,location=0,scrollbars=1');
+  win.document.write(htmlStr);
   win.document.close();
   win.focus();
 }
