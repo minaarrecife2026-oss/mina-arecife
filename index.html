@@ -2728,9 +2728,10 @@ function printRemision(movId){
 
   var htmlStr = '<!DOCTYPE html><html><head><meta charset="UTF-8">'+
     '<style>'+
-    '@page{size:80mm auto;margin:0 0 0 0;}'+
-    'html,body{margin:0!important;padding:0!important;font-family:Arial,sans-serif;font-size:11px;color:#000;width:80mm;-webkit-print-color-adjust:exact;}'+
-    '.copia{padding:2mm 3mm 3mm 3mm;width:74mm;page-break-after:always;margin:0;}'+
+    '@page{size:80mm auto;margin:0mm !important;}'+
+    '@page :first{margin-top:0mm !important;}'+
+    'html,body{margin:0!important;padding:0!important;font-family:Arial,sans-serif;font-size:11px;color:#000;width:80mm;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    '.copia{padding:1mm 2mm 2mm 2mm;width:76mm;page-break-after:always;margin:0!important;}'+
     '.copia:last-child{page-break-after:avoid;}'+
     '.emp{text-align:center;margin-bottom:3px;padding-bottom:3px;border-bottom:2px solid #000;}'+
     '.emp b{font-size:13px;display:block;font-weight:900;letter-spacing:0.5px;}'+
@@ -2738,7 +2739,7 @@ function printRemision(movId){
     '.tipo{text-align:center;font-size:12px;font-weight:900;margin:3px 0 4px 0;letter-spacing:0.5px;border-top:1px dashed #000;border-bottom:1px dashed #000;padding:3px 0;}'+
     '.sep{border:none;border-top:1px dashed #000;margin:3px 0;}'+
     '.fila{font-size:10px;margin:2px 0;display:flex;}'+
-    '.fila b{width:92px;flex-shrink:0;font-weight:900;}.fila span{flex:1;}'+
+    '.fila b{width:92px;flex-shrink:0;font-weight:900;margin-right:4px;}.fila span{flex:1;}'+
     'table{width:100%;border-collapse:collapse;margin:3px 0;font-size:10px;}'+
     'th{border-top:2px solid #000;border-bottom:2px solid #000;padding:3px 2px;font-size:10px;font-weight:900;text-align:left;}'+
     'td{padding:3px 2px;font-size:10px;}'+
@@ -2755,9 +2756,18 @@ function printRemision(movId){
     copia('COPIA 1 — CLIENTE')+
     copia('COPIA 2 — CONDUCTOR')+
     '<div class="no-print" style="text-align:center;padding:10px;display:flex;gap:8px;justify-content:center;">'+
-      '<button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:8px 24px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 IMPRIMIR 3 COPIAS</button>'+
+      '<button onclick="imprimirTermica()" style="background:#000;color:#fff;border:none;padding:8px 24px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 IMPRIMIR 3 COPIAS</button>'+
       '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:8px 16px;font-size:12px;border-radius:4px;cursor:pointer;">Cerrar</button>'+
-    '</div></body></html>';
+    '</div>'+
+    '<script>'+
+    'function imprimirTermica(){'+
+      'var style=document.createElement("style");'+
+      'style.textContent="@page{margin:0!important;size:80mm auto;}body{margin:0!important;padding:0!important;}";'+
+      'document.head.appendChild(style);'+
+      'setTimeout(function(){ window.print(); },100);'+
+    '}'+
+    '<\/script>'+
+    '</body></html>';
 
   var win = window.open('','_blank','width=360,height=750,toolbar=0,menubar=0,location=0,scrollbars=1');
   win.document.write(htmlStr);
@@ -2823,7 +2833,7 @@ function calcEditVenta(){
   document.getElementById('edit-iva-val').textContent  = fmt(iva);
   document.getElementById('edit-total-val').textContent= fmt(total);
 }
-function guardarEditarVenta(){
+async function guardarEditarVenta(){
   var rid    = document.getElementById('edit-id').value;
   var cant   = parseFloat(document.getElementById('edit-cant').value)||0;
   var precio = parseFloat(document.getElementById('edit-precio').value)||0;
@@ -2851,25 +2861,24 @@ function guardarEditarVenta(){
     editadoPor:    CU.user,
     editadoEn:     new Date().toISOString()
   };
-  // Actualizar en array local
-  var idx = movimientos.findIndex(function(x){ return (x._id||x.id)===rid; });
-  if(idx>=0){ Object.assign(movimientos[idx], updates); }
-  // Actualizar en Firebase
-  fbUpdate('movimientos', rid, updates).then(function(){
-    showToast('✅ Venta actualizada correctamente');
+  showToast('⏳ Guardando en Firebase...');
+  var ok = await fbUpdate('movimientos', rid, updates);
+  if(ok){
+    var idx = movimientos.findIndex(function(x){ return (x._id||x.id)===rid; });
+    if(idx>=0){ Object.assign(movimientos[idx], updates); }
+    showToast('✅ Remisión actualizada correctamente');
     cerrarEditarVenta();
     renderMovs();
     renderCartera();
     renderDash();
-    // Log de actividad
     var logEntry = { usuario:CU.user, rol:CU.role, tipo:'EDICION', fecha:today(),
       hora: (function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x}; return p(n.getHours())+':'+p(n.getMinutes()); })(),
       detalle:'Editó remisión '+(movimientos[idx]?movimientos[idx].remision:rid)+' — cliente: '+updates.clienteNombre, valor:0 };
     logActividad.push(logEntry);
     fbUpdate('logActividad', 'log_'+Date.now(), logEntry);
-  }).catch(function(e){
-    showToast('❌ Error al guardar: '+e.message);
-  });
+  } else {
+    showToast('❌ Error al guardar — verifica tu conexión a internet');
+  }
 }
 window.abrirEditarVenta  = abrirEditarVenta;
 window.cerrarEditarVenta = cerrarEditarVenta;
