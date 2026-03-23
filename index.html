@@ -1479,7 +1479,7 @@ function renderDash(){
   document.getElementById('dash-date').textContent = now.toLocaleDateString('es-CO',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
   var totalVentas  = ventas.reduce(function(a,b){ return a+b.total; },0);
-  var pendiente    = ventas.filter(function(m){ return m.estado==='Pendiente'||m.estado==='Parcial'; }).reduce(function(a,b){ return a+(b.total-(b.totalPagado||0)); },0);
+  var pendiente    = ventas.reduce(function(a,b){ return a+Math.max(0,b.total-(b.totalPagado||0)); },0);
   var alertas      = materiales.filter(function(m){ return getStock(m.id||m._id)<=m.min; }).length;
   var totalIng     = movimientos.filter(function(m){ return m.tipo==='INGRESO'; }).length;
   document.getElementById('kgrid').innerHTML =
