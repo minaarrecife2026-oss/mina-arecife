@@ -810,30 +810,51 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 </div>
 </div>
 </div>
-<div class="frow">
-<div class="fg" style="margin-bottom:14px;"><label>Forma de Pago 1 *</label>
-<select id="v-fpago" onchange="toggleCodigo();calcVenta()">
-<option value="">— Selecciona —</option>
-<option>Efectivo</option>
-<option>Credito</option>
-<option>Donacion</option>
-<option>Transferencia</option>
-<option>Consignacion</option>
-</select>
-</div>
-<div class="fg" style="margin-bottom:14px;"><label>Forma de Pago 2 <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
-<select id="v-fpago2" onchange="calcVenta()">
-<option value="">— Sin segunda forma —</option>
-<option>Efectivo</option>
-<option>Credito</option>
-<option>Transferencia</option>
-<option>Consignacion</option>
-</select>
-</div>
-</div>
-<div class="fg" id="fg-codigo" style="display:none;margin-bottom:14px;">
-<label>Código / Referencia</label>
-<input type="text" id="v-codigo" placeholder="COD-000">
+<!-- PAGOS -->
+<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;">
+  <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">💳 Forma de Pago</div>
+  <!-- Pago 1 -->
+  <div class="frow" style="margin-bottom:8px;">
+    <div class="fg"><label>Pago 1 *</label>
+      <select id="v-fpago" onchange="toggleCodigo();actualizarMontos()">
+        <option value="">— Selecciona —</option>
+        <option>Efectivo</option>
+        <option>Credito</option>
+        <option>Donacion</option>
+        <option>Transferencia</option>
+        <option>Consignacion</option>
+      </select>
+    </div>
+    <div class="fg"><label>Monto Pago 1</label>
+      <input type="number" id="v-monto1" min="0" step="1000" placeholder="Dejar vacío = total"
+        style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;outline:none;width:100%;"
+        oninput="actualizarMontos()">
+    </div>
+  </div>
+  <!-- Pago 2 -->
+  <div class="frow" style="margin-bottom:4px;">
+    <div class="fg"><label>Pago 2 <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
+      <select id="v-fpago2" onchange="actualizarMontos()">
+        <option value="">— Sin segundo pago —</option>
+        <option>Efectivo</option>
+        <option>Credito</option>
+        <option>Transferencia</option>
+        <option>Consignacion</option>
+      </select>
+    </div>
+    <div class="fg"><label>Monto Pago 2</label>
+      <input type="number" id="v-monto2" min="0" step="1000" placeholder="Complemento automático"
+        style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;outline:none;width:100%;"
+        oninput="actualizarMontos()">
+    </div>
+  </div>
+  <!-- Resumen pagos -->
+  <div id="resumen-pagos" style="display:none;margin-top:8px;padding:8px 10px;background:var(--card);border-radius:8px;border:1px solid var(--border);font-size:12px;"></div>
+  <div id="fg-codigo" style="display:none;margin-top:8px;">
+    <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;">Código / Referencia</label>
+    <input type="text" id="v-codigo" placeholder="COD-000"
+      style="width:100%;margin-top:4px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:10px 14px;font-size:13px;outline:none;">
+  </div>
 </div>
 <div class="frow">
 <div class="fg"><label>N° Remisión <span style="font-size:11px;color:var(--accent);">(automático)</span></label><input type="text" id="v-remision" placeholder="00000001" style="background:var(--surface2);color:var(--accent);font-weight:700;cursor:not-allowed;" readonly></div>
@@ -2437,6 +2458,31 @@ function calcVenta(){
   document.getElementById('r-total').textContent     = fmt(total);
 }
 window.setIva          = setIva;
+
+function actualizarMontos(){
+  toggleCodigo();
+  var total = +(document.getElementById('r-total').textContent.replace(/[^0-9]/g,''))||0;
+  var fp2   = (document.getElementById('v-fpago2')||{value:''}).value;
+  var m1El  = document.getElementById('v-monto1');
+  var m2El  = document.getElementById('v-monto2');
+  var resEl = document.getElementById('resumen-pagos');
+  if(!fp2 || !resEl){ if(resEl) resEl.style.display='none'; return; }
+  var m1 = +(m1El?m1El.value:0)||0;
+  // Si puso monto1, monto2 = total - monto1
+  if(m1 > 0 && total > 0){
+    var m2 = Math.max(0, total - m1);
+    if(m2El && !m2El.value) m2El.placeholder = '$ '+m2.toLocaleString('es-CO')+' (auto)';
+  }
+  var fp1 = (document.getElementById('v-fpago')||{value:''}).value;
+  if(fp1 && fp2 && total > 0){
+    resEl.style.display = 'block';
+    resEl.innerHTML = '💰 <b>'+fp1+':</b> $ '+(m1>0?m1.toLocaleString('es-CO'):'(pendiente de definir)')+
+      ' &nbsp;+&nbsp; 💳 <b>'+fp2+':</b> $ '+(m1>0?(total-m1).toLocaleString('es-CO'):'(complemento)');
+  } else {
+    resEl.style.display = 'none';
+  }
+}
+window.actualizarMontos = actualizarMontos;
 window.fillClienteName = fillClienteName;
 window.fillVentaPrec   = fillVentaPrec;
 window.toggleCodigo    = toggleCodigo;
@@ -2446,8 +2492,10 @@ async function regVenta(){
   var mid    = document.getElementById('v-material').value;
   var cant   = +document.getElementById('v-cant').value;
   var precio = +document.getElementById('v-precio').value;
-  var fp     = document.getElementById('v-fpago').value;
-  var fp2    = (document.getElementById('v-fpago2')||{value:''}).value||'';
+  var fp      = document.getElementById('v-fpago').value;
+  var fp2     = (document.getElementById('v-fpago2')||{value:''}).value||'';
+  var monto1  = +(document.getElementById('v-monto1')||{value:0}).value||0;
+  var monto2  = +(document.getElementById('v-monto2')||{value:0}).value||0;
   var fpagoFinal = fp + (fp2 ? ' + '+fp2 : '');
   var cid    = document.getElementById('v-cliente').value;
   var nombre = document.getElementById('v-nombre').value.trim();
@@ -2483,7 +2531,34 @@ async function regVenta(){
   var total = sub+iva;
   var clienteNombre = nombre||(getCli(cid)?getCli(cid).nombre:'Anonimo');
   if(!cedula && getCli(cid) && getCli(cid).nit) cedula = getCli(cid).nit;
-  var estado = (fp==='Credito'||fp.toLowerCase().includes('credit'))?'Pendiente':'Pagado';
+  // Determinar estado según formas de pago
+  var esCredito1 = fp==='Credito';
+  var esCredito2 = fp2==='Credito';
+  var totalPagadoInicial = 0;
+  var estado;
+  if(!fp2){
+    // Solo un pago
+    estado = esCredito1 ? 'Pendiente' : 'Pagado';
+    totalPagadoInicial = esCredito1 ? 0 : (sub+iva);
+  } else {
+    // Dos pagos — calcular cuánto se pagó ya
+    var subTotal = sub+iva;
+    if(monto1 > 0){
+      // Pago 1 en efectivo/transferencia = ya pagado
+      var pagadoYa = !esCredito1 ? monto1 : 0;
+      pagadoYa += (!esCredito2 && monto2 > 0) ? monto2 : 0;
+      if(monto1+monto2 >= subTotal){
+        // Suma de montos cubre el total
+        pagadoYa = !esCredito1 ? monto1 : 0;
+        pagadoYa += !esCredito2 ? (monto2||subTotal-monto1) : 0;
+      }
+      totalPagadoInicial = Math.min(pagadoYa, subTotal);
+      estado = totalPagadoInicial >= subTotal ? 'Pagado' : totalPagadoInicial > 0 ? 'Parcial' : 'Pendiente';
+    } else {
+      estado = (esCredito1 && esCredito2) ? 'Pendiente' : (!esCredito1 && !esCredito2) ? 'Pagado' : 'Parcial';
+      totalPagadoInicial = estado === 'Pagado' ? (sub+iva) : estado === 'Parcial' ? (sub+iva)/2 : 0;
+    }
+  }
   var d = document.getElementById('v-fecha').value || today();
   var h = document.getElementById('v-hora').value || hStr2();
   var remNum = remision||('SAL-'+d.replace(/-/g,'')+h.replace(':',''));
@@ -2495,7 +2570,8 @@ async function regVenta(){
     fpago:fpagoFinal, fpago2:fp2, codigo:codigo,
     remision: remNum,
     obra:obra, placa:placa, transporte:transporte, destino:destino, obs:obs, cedula:cedula,
-    estado:estado, usuario:CU.name, totalPagado:0
+    estado:estado, usuario:CU.name, totalPagado:totalPagadoInicial,
+    monto1:monto1||0, monto2:monto2||0
   };
   var ok = await fbAdd('movimientos', mov);
   if(ok){
@@ -2522,6 +2598,9 @@ function clearVenta(){
   var s2=document.getElementById('v-material2'); if(s2) s2.value='';
   var s3=document.getElementById('v-material3'); if(s3) s3.value='';
   var sf2=document.getElementById('v-fpago2'); if(sf2) sf2.value='';
+  var sm1=document.getElementById('v-monto1'); if(sm1){ sm1.value=''; sm1.placeholder='Dejar vacío = total'; }
+  var sm2=document.getElementById('v-monto2'); if(sm2){ sm2.value=''; sm2.placeholder='Complemento automático'; }
+  var rp=document.getElementById('resumen-pagos'); if(rp) rp.style.display='none';
 }
 window.regVenta   = regVenta;
 window.clearVenta = clearVenta;
