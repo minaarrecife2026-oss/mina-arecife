@@ -1533,6 +1533,7 @@ function renderDash(){
   var hoy = today();
   var ventasHoy   = ventas.filter(function(v){ return v.fecha===hoy; });
   var efectivoHoy = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Efectivo')>=0; }).reduce(function(a,b){ return a+b.total; },0);
+  var donacionHoy  = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Donacion')>=0; }).reduce(function(a,b){ return a+b.total; },0);
   var creditoHoy  = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Credito')>=0; }).reduce(function(a,b){ return a+b.total; },0);
   var transHoy    = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Transferencia')>=0||(v.fpago||'').indexOf('Consignacion')>=0; }).reduce(function(a,b){ return a+b.total; },0);
   var totalHoy    = ventasHoy.reduce(function(a,b){ return a+b.total; },0);
@@ -1546,6 +1547,11 @@ function renderDash(){
       html2 += '<div style="flex:1;min-width:130px;background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.3);border-radius:10px;padding:14px 16px;">';
       html2 += '<div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💵 Efectivo</div>';
       html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--green);">'+fmt(efectivoHoy)+'</div></div>';
+      if(donacionHoy>0){
+        html2 += '<div style="flex:1;min-width:130px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px 16px;">';
+        html2 += '<div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🎁 Donación</div>';
+        html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--amber);">'+fmt(donacionHoy)+'</div></div>';
+      }
       if(creditoHoy>0){
         html2 += '<div style="flex:1;min-width:130px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:14px 16px;">';
         html2 += '<div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💳 Crédito</div>';
