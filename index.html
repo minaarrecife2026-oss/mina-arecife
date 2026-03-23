@@ -910,7 +910,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <div class="frow">
 <div class="fg"><label>Nombre</label><input type="text" id="m-nombre" placeholder="Arena fina, Grava #57..."></div>
 <div class="fg"><label>Categoría</label>
-<select id="m-cat"><option>Arena</option><option>Grava</option><option>Triturado</option><option>Recebo</option><option>Rajón</option><option>Otro</option></select>
+<select id="m-cat"><option>Arena</option><option>Grava</option><option>Triturado</option><option>Recebo</option><option>Rajón</option><option>Transporte</option><option>Otro</option></select>
 </div>
 </div>
 <div class="frow3">
@@ -1274,6 +1274,7 @@ async function checkAndSeedData(){
       {id:'A001',nombre:'MDC-25',cat:'Asfalto',unidad:'ton',precio:850000,min:1},
       {id:'A002',nombre:'MDC-19',cat:'Asfalto',unidad:'ton',precio:800000,min:1},
       {id:'A003',nombre:'MDC-10',cat:'Asfalto',unidad:'ton',precio:600000,min:1},
+      {id:'T001',nombre:'Transporte',cat:'Transporte',unidad:'viaje',precio:0,min:0},
     ];
     for(var m of matsIni){
       await window._setDoc(window._doc(window._db,'materiales',m.id), m);
@@ -1302,6 +1303,7 @@ function loadOfflineData(){
       {id:'M011',nombre:'Mixto 1/2',cat:'Mixto',unidad:'m3',precio:57000,min:5},
       {id:'M013',nombre:'Mixto 3/4',cat:'Mixto',unidad:'m3',precio:57000,min:5},
       {id:'A001',nombre:'MDC-25',cat:'Asfalto',unidad:'ton',precio:850000,min:1},
+      {id:'T001',nombre:'Transporte',cat:'Transporte',unidad:'viaje',precio:0,min:0},
     ];
   }
   if(clientes.length === 0){
