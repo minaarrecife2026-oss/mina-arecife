@@ -1496,7 +1496,10 @@ function renderDash(){
   document.getElementById('dash-date').textContent = now.toLocaleDateString('es-CO',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
   var totalVentas  = ventas.reduce(function(a,b){ return a+b.total; },0);
-  var pendiente    = ventas.reduce(function(a,b){ return a+Math.max(0,b.total-(b.totalPagado||0)); },0);
+  // Cartera = solo Credito, Transferencia, Consignacion (igual que página Cartera)
+  var FPAGO_CART   = ['Credito','Transferencia','Consignacion','Consignaciones'];
+  var ventasCart   = ventas.filter(function(m){ return FPAGO_CART.indexOf((m.fpago||'').split(' + ')[0])>=0; });
+  var pendiente    = ventasCart.reduce(function(a,b){ return a+Math.max(0,b.total-(b.totalPagado||0)); },0);
   var alertas      = materiales.filter(function(m){ return getStock(m.id||m._id)<=m.min; }).length;
   var totalIng     = movimientos.filter(function(m){ return m.tipo==='INGRESO'; }).length;
   document.getElementById('kgrid').innerHTML =
