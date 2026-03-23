@@ -1519,19 +1519,20 @@ function renderDash(){
   document.getElementById('dash-date').textContent = now.toLocaleDateString('es-CO',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
   var totalVentas  = ventas.reduce(function(a,b){ return a+b.total; },0);
-  // Cartera = solo Credito, Transferencia, Consignacion (igual que página Cartera)
   var FPAGO_CART   = ['Credito','Transferencia','Consignacion','Consignaciones'];
   var ventasCart   = ventas.filter(function(m){ return FPAGO_CART.indexOf((m.fpago||'').split(' + ')[0])>=0; });
+  var ventasContado= ventas.filter(function(m){ return FPAGO_CART.indexOf((m.fpago||'').split(' + ')[0])<0; });
+  var totalCredito = ventasCart.reduce(function(a,b){ return a+b.total; },0);
+  var totalContado = ventasContado.reduce(function(a,b){ return a+b.total; },0);
   var pendiente    = ventasCart.reduce(function(a,b){ return a+Math.max(0,b.total-(b.totalPagado||0)); },0);
   var alertas      = materiales.filter(function(m){ return getStock(m.id||m._id)<=m.min; }).length;
-  var totalIng     = movimientos.filter(function(m){ return m.tipo==='INGRESO'; }).length;
   document.getElementById('kgrid').innerHTML =
-    kpi('Total Ventas',    fmt(totalVentas), 'acumulado',       'ck-gold')+
-    kpi('Cartera Pendiente',fmt(pendiente), 'por cobrar',       'ck-red')+
-    kpi('Ingresos Reg.',    totalIng,        'entradas',         'ck-green')+
-    kpi('Alertas Stock',    alertas,         'materiales bajos', 'ck-amber')+
-    kpi('Clientes',         clientes.length, 'registrados',      'ck-blue')+
-    kpi('Materiales',       materiales.length,'tipos activos',   'ck-purple');
+    kpi('Total Ventas',     fmt(totalVentas), 'acumulado',          'ck-gold')+
+    kpi('Ventas Contado',   fmt(totalContado),'efectivo + donación', 'ck-green')+
+    kpi('Ventas Crédito',   fmt(totalCredito),'en cartera',          'ck-blue')+
+    kpi('Cartera Pendiente',fmt(pendiente),   'por cobrar',          'ck-red')+
+    kpi('Alertas Stock',    alertas,          'materiales bajos',    'ck-amber')+
+    kpi('Clientes',         clientes.length,  'registrados',         'ck-purple');
 
   // ── Gráfica 1: Ventas últimos 7 días ──
   var dias = [];
@@ -1927,9 +1928,13 @@ var CARTERA_POR_PAG = 20;
 function renderCartera(){
   // Cartera solo incluye Credito, Transferencia y Consignacion
   var FPAGO_CARTERA = ['Credito','Transferencia','Consignacion','Consignaciones'];
-  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA' && FPAGO_CARTERA.indexOf(m.fpago)>=0; });
-  var totalPend = ventas.reduce(function(a,b){ return a+Math.max(0,b.total-(b.totalPagado||0)); },0);
-  var totalVend = ventas.reduce(function(a,b){ return a+b.total; },0);
+  var todasVentas  = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
+  var ventas = todasVentas.filter(function(m){ return FPAGO_CARTERA.indexOf((m.fpago||'').split(' + ')[0])>=0; });
+  var ventasEfectivo = todasVentas.filter(function(m){ return FPAGO_CARTERA.indexOf((m.fpago||'').split(' + ')[0])<0; });
+  var totalPend    = ventas.reduce(function(a,b){ return a+Math.max(0,b.total-(b.totalPagado||0)); },0);
+  var totalVend    = ventas.reduce(function(a,b){ return a+b.total; },0);
+  var totalEfect   = ventasEfectivo.filter(function(m){ return m.fpago==='Efectivo'||m.fpago.includes('Efectivo'); }).reduce(function(a,b){ return a+b.total; },0);
+  var totalDonac   = ventasEfectivo.filter(function(m){ return m.fpago==='Donacion'||m.fpago.includes('Donacion'); }).reduce(function(a,b){ return a+b.total; },0);
   var allNames  = [...new Set(ventas.map(function(v){ return v.clienteNombre; }))];
   var clisPend  = allNames.filter(function(n){
     return ventas.filter(function(v){ return v.clienteNombre===n; })
@@ -1937,9 +1942,11 @@ function renderCartera(){
   }).length;
 
   document.getElementById('kgrid-cartera').innerHTML =
-    kpi('Cartera Total',     fmt(totalPend), 'pendiente por cobrar', 'ck-red')+
-    kpi('Total Vendido',     fmt(totalVend), 'acumulado',            'ck-gold')+
-    kpi('Clientes con Deuda',clisPend,       'clientes',             'ck-amber');
+    kpi('Cartera Total',     fmt(totalPend),  'pendiente por cobrar', 'ck-red')+
+    kpi('Total Vendido',     fmt(totalVend),  'crédito acumulado',   'ck-gold')+
+    kpi('Ventas Efectivo',   fmt(totalEfect), 'cobrado en efectivo',  'ck-green')+
+    kpi('Donaciones',        fmt(totalDonac), 'total donaciones',     'ck-blue')+
+    kpi('Clientes con Deuda',clisPend,        'clientes',             'ck-amber');
 
   // Construir datos por cliente
   _carteraDatos = allNames.map(function(nombre){
