@@ -658,6 +658,11 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
   <div style="padding:20px 24px;">
     <input type="hidden" id="edit-id">
     <div class="frow">
+      <div class="fg"><label>Cliente (lista)</label>
+        <select id="edit-cliente-sel" onchange="editSelCliente()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;outline:none;">
+          <option value="">— Selecciona o escribe abajo —</option>
+        </select>
+      </div>
       <div class="fg"><label>Nombre del Cliente</label>
         <input type="text" id="edit-nombre" placeholder="Nombre del cliente">
       </div>
@@ -805,14 +810,26 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 </div>
 </div>
 </div>
-<div class="fg" style="margin-bottom:14px;"><label>Forma de Pago *</label>
+<div class="frow">
+<div class="fg" style="margin-bottom:14px;"><label>Forma de Pago 1 *</label>
 <select id="v-fpago" onchange="toggleCodigo();calcVenta()">
 <option value="">— Selecciona —</option>
 <option>Efectivo</option>
 <option>Credito</option>
 <option>Donacion</option>
 <option>Transferencia</option>
+<option>Consignacion</option>
 </select>
+</div>
+<div class="fg" style="margin-bottom:14px;"><label>Forma de Pago 2 <span style="font-size:10px;color:var(--text3)">(opcional)</span></label>
+<select id="v-fpago2" onchange="calcVenta()">
+<option value="">— Sin segunda forma —</option>
+<option>Efectivo</option>
+<option>Credito</option>
+<option>Transferencia</option>
+<option>Consignacion</option>
+</select>
+</div>
 </div>
 <div class="fg" id="fg-codigo" style="display:none;margin-bottom:14px;">
 <label>Código / Referencia</label>
@@ -1882,8 +1899,10 @@ var _carteraPagina = 1;
 var CARTERA_POR_PAG = 20;
 
 function renderCartera(){
-  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA'; });
-  var totalPend = ventas.reduce(function(a,b){ return a+(b.total-(b.totalPagado||0)); },0);
+  // Cartera solo incluye Credito, Transferencia y Consignacion
+  var FPAGO_CARTERA = ['Credito','Transferencia','Consignacion','Consignaciones'];
+  var ventas = movimientos.filter(function(m){ return m.tipo==='VENTA' && FPAGO_CARTERA.indexOf(m.fpago)>=0; });
+  var totalPend = ventas.reduce(function(a,b){ return a+Math.max(0,b.total-(b.totalPagado||0)); },0);
   var totalVend = ventas.reduce(function(a,b){ return a+b.total; },0);
   var allNames  = [...new Set(ventas.map(function(v){ return v.clienteNombre; }))];
   var clisPend  = allNames.filter(function(n){
@@ -1910,7 +1929,7 @@ function renderCartera(){
   filtrarCartera();
 
   // Tabla deudas pendientes
-  var pends = ventas.filter(function(v){ return (v.total-(v.totalPagado||0))>0; }).reverse();
+  var pends = ventas.filter(function(v){ return (v.total-(v.totalPagado||0))>0; }).sort(function(a,b){ return a.clienteNombre.localeCompare(b.clienteNombre); });
   document.getElementById('tbl-cartera').innerHTML = pends.length ? pends.map(function(v){
     var mat   = getMat(v.matId);
     var saldo = v.total - (v.totalPagado||0);
@@ -2180,13 +2199,26 @@ async function confirmarPagoCliente(){
   if(monto <= 0){ showToast('Ingresa un monto válido'); return; }
   var forma = document.getElementById('pc2-forma').value;
   var obs   = document.getElementById('pc2-obs').value||'';
+
+  // Incluir solo remisiones de Cartera (Credito, Transferencia, Consignacion)
+  var FPAGO_CARTERA = ['Credito','Transferencia','Consignacion','Consignaciones'];
   var pendientes = movimientos.filter(function(m){
-    return m.tipo==='VENTA' && m.clienteNombre===nombre && (m.estado==='Pendiente'||m.estado==='Parcial');
+    return m.tipo==='VENTA' && m.clienteNombre===nombre &&
+           FPAGO_CARTERA.indexOf(m.fpago.split(' + ')[0])>=0 &&
+           (m.total-(m.totalPagado||0))>0;
   }).sort(function(a,b){ return a.fecha>b.fecha?1:-1; });
+
   var totalDeuda = pendientes.reduce(function(a,m){ return a+(m.total-(m.totalPagado||0)); },0);
-  if(monto > totalDeuda){ showToast('El monto supera la deuda total de '+fmt(totalDeuda)); return; }
+  if(!pendientes.length){ showToast('Este cliente no tiene deudas en cartera'); return; }
+
+  // Generar número de recibo
+  var now2 = new Date(); var p2=function(x){return x<10?'0'+x:x;};
+  var nRecibo = 'REC-'+now2.getFullYear()+p2(now2.getMonth()+1)+p2(now2.getDate())+'-'+Math.floor(1000+Math.random()*9000);
+  var horaRec = p2(now2.getHours())+':'+p2(now2.getMinutes());
+  var remisionesPagadas = [];
   var restante = monto;
   var count = 0;
+
   for(var i=0; i<pendientes.length; i++){
     if(restante <= 0) break;
     var mov = pendientes[i];
@@ -2196,14 +2228,87 @@ async function confirmarPagoCliente(){
     restante -= aplicar;
     mov.estado = mov.totalPagado>=mov.total ? 'Pagado' : 'Parcial';
     if(!mov.anticipos) mov.anticipos = [];
-    mov.anticipos.push({fecha:today(), monto:aplicar, forma:forma, obs:obs});
+    mov.anticipos.push({fecha:today(), hora:horaRec, monto:aplicar, forma:forma, obs:obs, recibo:nRecibo});
+    remisionesPagadas.push({remision:mov.remision, aplicado:aplicar, saldoAntes:saldo});
     var fbId = mov._id||mov.id;
     if(fbId) await fbUpdate('movimientos', fbId, {estado:mov.estado, totalPagado:mov.totalPagado, formaCobro:forma, fechaCobro:today(), anticipos:mov.anticipos});
     count++;
   }
-  showToast('✅ Pago de '+fmt(monto)+' aplicado a '+count+' remisión(es)');
+
+  // Guardar recibo en Firebase
+  var reciboDoc = {
+    numero:nRecibo, fecha:today(), hora:horaRec,
+    clienteNombre:nombre, monto:monto, forma:forma, obs:obs,
+    remisiones:remisionesPagadas, usuario:CU.user, tipo:'RECIBO_PAGO'
+  };
+  await fbAdd('logActividad', reciboDoc);
+
+  showToast('✅ Pago '+fmt(monto)+' registrado — Recibo: '+nRecibo);
+
+  // Imprimir recibo automáticamente
+  imprimirReciboPago(reciboDoc);
   go('cartera');
 }
+
+function imprimirReciboPago(r){
+  var meses=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  var partes=(r.fecha||'').split('-');
+  var fechaStr=partes.length===3?meses[parseInt(partes[1])-1]+' '+partes[2]+' DE '+partes[0]:r.fecha;
+  var filasRem=(r.remisiones||[]).map(function(x){
+    return '<tr><td style="padding:2px 3px;font-size:10px;">'+x.remision+'</td>'+
+           '<td style="padding:2px 3px;font-size:10px;text-align:right;">$ '+Math.round(x.aplicado).toLocaleString('es-CO')+'</td></tr>';
+  }).join('');
+
+  function copia(label){
+    return '<div class="copia">'+
+      '<div style="text-align:center;padding-bottom:3px;border-bottom:2px solid #000;margin-bottom:3px;">'+
+        '<b style="font-size:13px;display:block;font-weight:900;">BROUS INVESTMENTS SAS</b>'+
+        '<span style="font-size:9px;display:block;">NIT: 901.471.724-2 | VEREDA PTO TEMBLEQUE | Movil: 3214528140</span>'+
+      '</div>'+
+      '<div style="text-align:center;font-size:12px;font-weight:900;padding:3px 0;border-bottom:2px solid #000;margin-bottom:4px;">'+
+        'RECIBO DE PAGO '+r.numero+
+      '</div>'+
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:3px;">'+
+        '<tr><td style="font-size:10px;font-weight:900;padding:2px 0;width:90px;">FECHA:</td><td style="font-size:10px;">'+fechaStr+' '+r.hora+'</td></tr>'+
+        '<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">CLIENTE:</td><td style="font-size:10px;">'+r.clienteNombre.toUpperCase()+'</td></tr>'+
+        '<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">FORMA PAGO:</td><td style="font-size:10px;">'+r.forma+'</td></tr>'+
+        (r.obs?'<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">OBS:</td><td style="font-size:10px;">'+r.obs+'</td></tr>':'')+
+      '</table>'+
+      '<table style="width:100%;border-collapse:collapse;margin-top:3px;">'+
+        '<thead><tr>'+
+          '<th style="border-top:2px solid #000;border-bottom:2px solid #000;padding:2px 3px;font-size:10px;font-weight:900;text-align:left;">REMISIÓN</th>'+
+          '<th style="border-top:2px solid #000;border-bottom:2px solid #000;padding:2px 3px;font-size:10px;font-weight:900;text-align:right;">ABONO</th>'+
+        '</tr></thead>'+
+        '<tbody>'+filasRem+'</tbody>'+
+      '</table>'+
+      '<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:900;border-top:2px solid #000;border-bottom:1px dashed #000;padding:3px 0;margin-top:2px;">'+
+        '<span>TOTAL PAGADO:</span><span>$ '+Math.round(r.monto).toLocaleString('es-CO')+'</span>'+
+      '</div>'+
+      '<div style="display:flex;gap:6px;margin-top:10mm;">'+
+        '<div style="flex:1;text-align:center;font-size:9px;font-weight:700;"><div style="border-bottom:1.5px solid #000;height:10mm;margin-bottom:2px;"></div>Firma Cliente</div>'+
+        '<div style="flex:1;text-align:center;font-size:9px;font-weight:700;"><div style="border-bottom:1.5px solid #000;height:10mm;margin-bottom:2px;"></div>Firma Empresa</div>'+
+      '</div>'+
+      '<div style="font-size:8px;margin-top:3px;border-top:1px dashed #000;padding-top:2px;font-weight:700;">'+
+        'Recibo N° '+r.numero+' | '+label+
+      '</div>'+
+    '</div>';
+  }
+
+  var htmlStr='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<style>@page{size:80mm auto;margin:0!important;}html,body{margin:0!important;padding:0!important;font-family:Arial,sans-serif;color:#000;width:80mm;}'+
+    '.copia{padding:2mm 2.5mm 3mm 2.5mm;width:75mm;page-break-after:always;}.copia:last-child{page-break-after:avoid;}'+
+    '@media print{.no-print{display:none!important;}}'+
+    '</style></head><body>'+
+    copia('ORIGINAL — EMPRESA')+copia('COPIA — CLIENTE')+
+    '<div class="no-print" style="text-align:center;padding:10px;display:flex;gap:8px;justify-content:center;">'+
+      '<button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:8px 24px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 IMPRIMIR</button>'+
+      '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:8px 16px;font-size:12px;border-radius:4px;cursor:pointer;">Cerrar</button>'+
+    '</div></body></html>';
+
+  var win=window.open('','_blank','width=360,height=600,toolbar=0,menubar=0,location=0,scrollbars=1');
+  win.document.write(htmlStr); win.document.close(); win.focus();
+}
+window.imprimirReciboPago=imprimirReciboPago;
 window.abrirPagoCliente    = abrirPagoCliente;
 window.cargarDeudaCliente  = cargarDeudaCliente;
 window.confirmarPagoCliente= confirmarPagoCliente;
@@ -2337,6 +2442,8 @@ async function regVenta(){
   var cant   = +document.getElementById('v-cant').value;
   var precio = +document.getElementById('v-precio').value;
   var fp     = document.getElementById('v-fpago').value;
+  var fp2    = (document.getElementById('v-fpago2')||{value:''}).value||'';
+  var fpagoFinal = fp + (fp2 ? ' + '+fp2 : '');
   var cid    = document.getElementById('v-cliente').value;
   var nombre = document.getElementById('v-nombre').value.trim();
   var codigo = document.getElementById('v-codigo').value.trim();
@@ -2380,7 +2487,7 @@ async function regVenta(){
     clienteId:cid, clienteNombre:clienteNombre,
     matId:mid, cant:cant, precio:precio, iva:iva, total:total,
     items:items,
-    fpago:fp, codigo:codigo,
+    fpago:fpagoFinal, fpago2:fp2, codigo:codigo,
     remision: remNum,
     obra:obra, placa:placa, transporte:transporte, destino:destino, obs:obs, cedula:cedula,
     estado:estado, usuario:CU.name, totalPagado:0
@@ -2409,6 +2516,7 @@ function clearVenta(){
   document.getElementById('fg-codigo').style.display = 'none';
   var s2=document.getElementById('v-material2'); if(s2) s2.value='';
   var s3=document.getElementById('v-material3'); if(s3) s3.value='';
+  var sf2=document.getElementById('v-fpago2'); if(sf2) sf2.value='';
 }
 window.regVenta   = regVenta;
 window.clearVenta = clearVenta;
@@ -2765,9 +2873,31 @@ window.printRemision = printRemision;
 // ======================================================
 // EDITAR VENTA
 // ======================================================
+function editSelCliente(){
+  var sel=document.getElementById('edit-cliente-sel');
+  if(!sel||!sel.value) return;
+  var cli=getCli(sel.value);
+  if(cli){
+    var nomEl=document.getElementById('edit-nombre'); if(nomEl) nomEl.value=cli.nombre;
+    var cedEl=document.getElementById('edit-cedula'); if(cedEl) cedEl.value=cli.nit||'';
+  }
+}
+window.editSelCliente=editSelCliente;
+
 function abrirEditarVenta(rid){
   var m = movimientos.find(function(x){ return (x._id||x.id)===rid; });
   if(!m){ showToast('❌ No se encontró la venta'); return; }
+  // Llenar select de clientes
+  var selCli=document.getElementById('edit-cliente-sel');
+  if(selCli){
+    selCli.innerHTML='<option value="">— Selecciona o escribe abajo —</option>';
+    clientes.forEach(function(c){
+      var op=document.createElement('option');
+      op.value=c._id||c.id; op.textContent=c.nombre;
+      selCli.appendChild(op);
+    });
+    selCli.value='';
+  }
   // Llenar selects de materiales
   var selMat = document.getElementById('edit-material');
   selMat.innerHTML = '<option value="">— Selecciona —</option>';
