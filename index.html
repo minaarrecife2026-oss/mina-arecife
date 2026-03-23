@@ -3118,63 +3118,6 @@ async function generarExcelCompleto(tipo){
   ws2.autoFilter={from:{row:6,column:1},to:{row:6,column:h2.length}};
   ws2.views[0].state='frozen'; ws2.views[0].ySplit=6;
 
-  // ══════════════════════════════════════════════
-  // HOJAS INDIVIDUALES POR CLIENTE
-  // ══════════════════════════════════════════════
-  var h3=['Fecha','Remisión','Material','Cantidad','Precio','Subtotal','IVA','Total','F. Pago','Estado','Pagado','Saldo','Obra','Placa','Destino'];
-  var w3=[12,13,20,10,13,13,12,13,13,11,13,13,16,10,14];
-
-  clientes.forEach(function(cli){
-    var vv=porCliente[cli];
-    var sheetName=cli.substring(0,28);
-    var wsCli=wb.addWorksheet(sheetName);
-    wsCli.views=[{showGridLines:false}];
-
-    var totalF=vv.reduce(function(a,b){return a+b.total;},0);
-    var totalP=vv.reduce(function(a,b){return a+(b.totalPagado||0);},0);
-    var saldo=totalF-totalP;
-    var cedula=vv[0].cedula||'';
-
-    addEncabezado(wsCli,h3.length,'ESTADO DE CUENTA — '+cli.toUpperCase()+' | CC/NIT: '+cedula);
-
-    // KPI rápido del cliente
-    wsCli.mergeCells(6,1,6,5);
-    var kFact=wsCli.getRow(6).getCell(1);
-    kFact.value='TOTAL FACTURADO:  $'+totalF.toLocaleString('es-CO');
-    kFact.font=xlFont({bold:true,color:'0B0F1A',size:11}); kFact.fill=xlF('FDE68A'); kFact.alignment=xlAlign('center','middle');
-    wsCli.mergeCells(6,6,6,10);
-    var kPag=wsCli.getRow(6).getCell(6);
-    kPag.value='TOTAL PAGADO:  $'+totalP.toLocaleString('es-CO');
-    kPag.font=xlFont({bold:true,color:'16A34A',size:11}); kPag.fill=xlF('DCFCE7'); kPag.alignment=xlAlign('center','middle');
-    wsCli.mergeCells(6,11,6,15);
-    var kSal=wsCli.getRow(6).getCell(11);
-    kSal.value='SALDO PENDIENTE:  $'+saldo.toLocaleString('es-CO');
-    kSal.font=xlFont({bold:true,color:saldo>0?'DC2626':'16A34A',size:11});
-    kSal.fill=xlF(saldo>0?'FEE2E2':'DCFCE7'); kSal.alignment=xlAlign('center','middle');
-    wsCli.getRow(6).height=24;
-
-    addHeaders(wsCli,7,h3,w3);
-    vv.forEach(function(v,i){
-      var mat=getMat(v.matId); var sub=v.cant*v.precio; var sal=v.total-(v.totalPagado||0);
-      addDataRow(wsCli,8+i,[v.fecha,v.remision,mat?mat.nombre:v.matId,
-        v.cant,v.precio,sub,v.iva||0,v.total,v.fpago,v.estado||'',
-        v.totalPagado||0,sal,v.obra||'',v.placa||'',v.destino||''],h3);
-    });
-    var trC=8+vv.length;
-    addTotalRow(wsCli,trC,['','',''
-      ,vv.reduce(function(a,b){return a+b.cant;},0),'',
-      vv.reduce(function(a,b){return a+b.cant*b.precio;},0),
-      vv.reduce(function(a,b){return a+(b.iva||0);},0),
-      totalF,'','',totalP,saldo,'','',''],
-      h3,'TOTAL  ('+vv.length+' remisiones)');
-    wsCli.autoFilter={from:{row:7,column:1},to:{row:7,column:h3.length}};
-    wsCli.views[0].state='frozen'; wsCli.views[0].ySplit=7;
-
-    // Hipervínculo de vuelta al resumen
-    var cVolver=wsCli.getRow(trC+2).getCell(1);
-    cVolver.value={text:'⬅ Volver al Resumen', hyperlink:"#'📋 Resumen por Cliente'!A1"};
-    cVolver.font={name:'Arial',size:9,color:{argb:'FF2563EB'},underline:true};
-  });
 
   // ── HOJA BÚSQUEDA CLIENTE (si viene de esa pantalla) ──
   if(tipo==='cliente'&&_bcResultados.length){
@@ -3217,7 +3160,7 @@ async function generarExcelCompleto(tipo){
   var fname='MinaArrecife_'+cliN.replace(/\s/g,'_')+'_'+today()+'.xlsx';
   a.href=url; a.download=fname; a.click();
   URL.revokeObjectURL(url);
-  showToast('✅ Excel listo: '+(clientes.length+3)+' hojas generadas');
+  showToast('✅ Excel listo — 3 hojas generadas');
 }
 
 function exportCarteraExcel()  { generarExcelCompleto('Cartera');    }
