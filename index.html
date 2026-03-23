@@ -344,6 +344,9 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 
 <div class="kgrid" id="kgrid"></div>
 
+<!-- Resumen del día -->
+<div id="resumen-dia" style="margin-bottom:20px;"></div>
+
 <!-- Gráficas -->
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;margin-bottom:20px;">
   <div class="twrap">
@@ -1526,6 +1529,43 @@ function renderDash(){
   var totalContado = ventasContado.reduce(function(a,b){ return a+b.total; },0);
   var pendiente    = ventasCart.reduce(function(a,b){ return a+Math.max(0,b.total-(b.totalPagado||0)); },0);
   var alertas      = materiales.filter(function(m){ return getStock(m.id||m._id)<=m.min; }).length;
+  // ── Resumen del día ──
+  var hoy = today();
+  var ventasHoy   = ventas.filter(function(v){ return v.fecha===hoy; });
+  var efectivoHoy = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Efectivo')>=0; }).reduce(function(a,b){ return a+b.total; },0);
+  var creditoHoy  = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Credito')>=0; }).reduce(function(a,b){ return a+b.total; },0);
+  var transHoy    = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Transferencia')>=0||(v.fpago||'').indexOf('Consignacion')>=0; }).reduce(function(a,b){ return a+b.total; },0);
+  var totalHoy    = ventasHoy.reduce(function(a,b){ return a+b.total; },0);
+  var rdEl = document.getElementById('resumen-dia');
+  if(rdEl){
+    if(totalHoy>0){
+      var fechaHoyStr = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
+      var html2 = '<div style="background:var(--card);border:2px solid var(--border);border-radius:14px;padding:18px 22px;margin-bottom:16px;">';
+      html2 += '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">📅 VENTAS DE HOY — '+fechaHoyStr+' ('+ventasHoy.length+' remisión'+(ventasHoy.length!==1?'es':'')+')</div>';
+      html2 += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+      html2 += '<div style="flex:1;min-width:130px;background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.3);border-radius:10px;padding:14px 16px;">';
+      html2 += '<div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💵 Efectivo</div>';
+      html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--green);">'+fmt(efectivoHoy)+'</div></div>';
+      if(creditoHoy>0){
+        html2 += '<div style="flex:1;min-width:130px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:14px 16px;">';
+        html2 += '<div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💳 Crédito</div>';
+        html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--purple);">'+fmt(creditoHoy)+'</div></div>';
+      }
+      if(transHoy>0){
+        html2 += '<div style="flex:1;min-width:130px;background:rgba(37,99,235,0.12);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:14px 16px;">';
+        html2 += '<div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🏦 Transf./Consig.</div>';
+        html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--blue);">'+fmt(transHoy)+'</div></div>';
+      }
+      html2 += '<div style="flex:1;min-width:130px;background:rgba(200,134,10,0.12);border:2px solid rgba(200,134,10,0.4);border-radius:10px;padding:14px 16px;">';
+      html2 += '<div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">📊 Total del Día</div>';
+      html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--gold);">'+fmt(totalHoy)+'</div></div>';
+      html2 += '</div></div>';
+      rdEl.innerHTML = html2;
+    } else {
+      rdEl.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 22px;margin-bottom:16px;color:var(--text3);font-size:13px;">📅 Hoy no hay ventas registradas todavía.</div>';
+    }
+  }
+
   document.getElementById('kgrid').innerHTML =
     kpi('Total Ventas',     fmt(totalVentas), 'acumulado',          'ck-gold')+
     kpi('Ventas Contado',   fmt(totalContado),'efectivo + donación', 'ck-green')+
