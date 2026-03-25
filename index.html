@@ -940,7 +940,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <div class="frow">
 <div class="fg"><label>Nombre</label><input type="text" id="m-nombre" placeholder="Arena fina, Grava #57..."></div>
 <div class="fg"><label>Categoría</label>
-<select id="m-cat"><option>Arena</option><option>Grava</option><option>Triturado</option><option>Recebo</option><option>Rajón</option><option>Transporte</option><option>Otro</option></select>
+<select id="m-cat"><option>Arena</option><option>Grava</option><option>Triturado</option><option>Recebo</option><option>Rajón</option><option>Mixto</option><option>Transporte</option><option>Piedra</option><option>Asfalto</option><option>Otro</option></select>
 </div>
 </div>
 <div class="frow3">
@@ -2524,7 +2524,7 @@ function renderMovs(){
       '<td>'+(m.tipo==='VENTA'?'<button class="btn btn-ghost btn-sm" onclick="printRemision(\''+rid+'\')">🖨 Imp.</button>':'—')+'</td>'+
       '<td>'+(m.tipo==='VENTA'&&(m.total-(m.totalPagado||0))>0?'<button onclick="abrirCobroRapido(\''+rid+'\')" style="background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.4);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">💰 Pagar</button>':m.tipo==='VENTA'?'<span style="color:var(--green);font-size:11px;">✅ Al día</span>':'—')+'</td>'+
       '<td>'+(m.tipo==='VENTA'?'<button onclick="abrirEditarVenta(\''+rid+'\')" style="background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">✏️ Editar</button>':'—')+'</td>'+
-      '<td>'+(CU.role==='admin'||CU.role==='gerencia'?'<button onclick="eliminarMovimiento(\''+rid+'\',\''+(m.remision||m._id||m.id)+'\')" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,.3);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">🚫 Anular</button>':'—')+'</td>'+
+      '<td>'+(CU.role==='gerencia'?'<button onclick="eliminarMovimiento(\''+rid+'\',\''+(m.remision||m._id||m.id)+'\')" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,.3);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">🚫 Anular</button>':'—')+'</td>'+
     '</tr>';
   }).join('') : '<tr class="empty-row"><td colspan="13">Sin movimientos</td></tr>';
 }
@@ -2534,7 +2534,7 @@ window.filterMovTab = filterMovTab;
 window.filterMovQ   = filterMovQ;
 
 async function eliminarMovimiento(id, remision){
-  if(CU.role !== 'admin' && CU.role !== 'gerencia'){ alert('Solo el administrador o gerencia puede anular remisiones.'); return; }
+  if(CU.role !== 'gerencia'){ alert('Solo gerencia puede anular remisiones.'); return; }
   if(!confirm('⚠️ ¿Anular la remisión ' + remision + '?\n\nQuedará como ANULADA y no sumará en los totales.')) return;
   // Anular: marcar como ANULADA en Firebase, NO eliminar
   var mov = movimientos.find(function(x){ return (x._id||x.id)===id; });
@@ -2600,8 +2600,13 @@ function renderItems(){
         '<div class="fg"><label>Cantidad'+(i===0?' *':'')+'</label>'+
           '<input type="number" id="item-cant-'+i+'" min="0" step="0.1" placeholder="0" value="'+(it.cant||'')+'" oninput="onItemChange('+i+')" style="background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;outline:none;width:100%;">'+
         '</div>'+
-        '<div class="fg"><label>Precio Unitario'+(i===0?' *':'')+'</label>'+
+        '<div class="fg"><label>Precio'+(i===0?' *':'')+'</label>'+
           '<input type="number" id="item-prec-'+i+'" min="0" step="100" placeholder="0" value="'+(it.precio||'')+'" oninput="onItemChange('+i+')" style="background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;outline:none;width:100%;">'+
+        '</div>'+
+      '</div>'+
+      '<div id="item-desc-wrap-'+i+'" style="display:'+(it.desc?'block':'none')+';">'+
+        '<div class="fg" style="margin-top:6px;"><label>📍 Destino del flete</label>'+
+          '<input type="text" id="item-desc-'+i+'" placeholder="Ej: Bogotá, Villavicencio, Otro municipio..." value="'+(it.desc||'')+'" oninput="onItemDescChange('+i+')" style="background:var(--bg);border:1px solid rgba(200,134,10,0.4);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;outline:none;width:100%;">'+
         '</div>'+
       '</div>'+
     '</div>';
@@ -2615,7 +2620,7 @@ function renderItems(){
 }
 
 function onItemChange(idx){
-  var sel  = document.getElementById('item-mat-'+idx);
+  var sel    = document.getElementById('item-mat-'+idx);
   var cantEl = document.getElementById('item-cant-'+idx);
   var precEl = document.getElementById('item-prec-'+idx);
   if(!sel) return;
@@ -2624,6 +2629,15 @@ function onItemChange(idx){
     var mat = getMat(matId);
     if(mat && mat.precio) precEl.value = mat.precio;
   }
+  // Mostrar campo destino flete si es Transporte
+  var mat = getMat(matId);
+  var esTransporte = mat && (mat.nombre||'').toLowerCase().indexOf('transporte')>=0;
+  var descWrap = document.getElementById('item-desc-wrap-'+idx);
+  if(descWrap) descWrap.style.display = esTransporte ? 'block' : 'none';
+  // Precio editable siempre para transporte
+  if(esTransporte && precEl) precEl.style.borderColor = 'rgba(200,134,10,0.6)';
+  else if(precEl) precEl.style.borderColor = '';
+
   if(_itemsVenta[idx]){
     _itemsVenta[idx].matId  = matId;
     _itemsVenta[idx].cant   = +(cantEl?cantEl.value:0)||0;
@@ -2632,16 +2646,24 @@ function onItemChange(idx){
   calcVenta();
 }
 
+function onItemDescChange(idx){
+  var descEl = document.getElementById('item-desc-'+idx);
+  if(_itemsVenta[idx] && descEl) _itemsVenta[idx].desc = descEl.value;
+}
+window.onItemDescChange = onItemDescChange;
+
 function getItemsData(){
   // Leer valores actuales del DOM
   return _itemsVenta.map(function(it,i){
     var sel  = document.getElementById('item-mat-'+i);
     var cantEl = document.getElementById('item-cant-'+i);
     var precEl = document.getElementById('item-prec-'+i);
+    var descEl = document.getElementById('item-desc-'+i);
     return {
       matId:  sel?sel.value:it.matId,
       cant:   +(cantEl?cantEl.value:0)||0,
-      precio: +(precEl?precEl.value:0)||0
+      precio: +(precEl?precEl.value:0)||0,
+      desc:   descEl?descEl.value:''
     };
   }).filter(function(it){ return it.matId && it.cant>0 && it.precio>0; });
 }
@@ -2657,7 +2679,7 @@ function initVenta(){
   fillSelects();
   document.getElementById('fg-codigo').style.display = 'none';
   // Inicializar con 1 ítem dinámico
-  if(_itemsVenta.length===0) _itemsVenta = [{matId:'',cant:0,precio:0}];
+  if(_itemsVenta.length===0) _itemsVenta = [{matId:'',cant:0,precio:0,desc:''}];
   renderItems();
   var remNum = movimientos.filter(function(m){ return m.tipo==='VENTA'; }).length + 1;
   document.getElementById('v-remision').value = String(remNum).padStart(8,'0');
@@ -3111,6 +3133,8 @@ function printRemision(movId){
   var filasItems = items.map(function(it, idx){
     var mat = getMat(it.matId);
     var nom = (mat?mat.nombre:it.matId||'').toUpperCase();
+    var esTransporte = nom.indexOf('TRANSPORTE')>=0;
+    if(esTransporte && it.desc) nom += ' — '+it.desc.toUpperCase();
     var cant = it.cant;
     var cantStr = (cant % 1 === 0) ? String(Math.round(cant)) : cant.toFixed(1);
     var valor = Math.round(cant * it.precio);
