@@ -3054,22 +3054,7 @@ function printRemision(movId){
         '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:10px 16px;font-size:13px;border-radius:5px;cursor:pointer;">Cerrar</button>'+
       '</div>'+
     '</div>'+
-    '<script>'+
-    'var _numCopias=1;'+
-    'function setCopias(n){'+
-      '_numCopias=n;'+
-      'var cont=document.getElementById("copias-extra");'+
-      'if(!cont) return;'+
-      'cont.innerHTML="";'+
-      'for(var i=1;i<n;i++){'+
-        'cont.innerHTML+=document.getElementById("copia-base").outerHTML;'+
-      '}'+
-      '[1,2,3].forEach(function(x){'+
-        'var b=document.getElementById("btn-c"+x);'+
-        'if(b){b.style.background=x===n?"#000":"#fff";b.style.color=x===n?"#fff":"#333";b.style.borderColor=x===n?"#000":"#ccc";}'+
-      '});'+
-    '}'+
-    '<\/script>'+
+    '<scr'+'ipt>var _numCopias=1;function setCopias(n){var cont=document.getElementById("copias-extra");if(!cont)return;cont.innerHTML="";for(var i=1;i<n;i++){cont.innerHTML+=document.getElementById("copia-base").outerHTML;}[1,2,3].forEach(function(x){var b=document.getElementById("btn-c"+x);if(b){b.style.background=x===n?"#000":"#fff";b.style.color=x===n?"#fff":"#333";b.style.borderColor=x===n?"#000":"#ccc";}});}<\/scr'+'ipt>'+
     '</body></html>';
 
   var win = window.open('','_blank','width=360,height=750,toolbar=0,menubar=0,location=0,scrollbars=1');
@@ -4127,9 +4112,7 @@ function generarCertificado(clienteNombre){
 }
 window.generarCertificado = generarCertificado;
 
-</script>
-</body>
-</html
+
 function renderResumeDia(){
   var selF = document.getElementById('dash-fecha-sel');
   var fecha = selF ? selF.value : today();
