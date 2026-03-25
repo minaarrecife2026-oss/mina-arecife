@@ -493,18 +493,32 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 
 <!-- ── ANTICIPO ─────────────── -->
 <div class="page" id="page-anticipo">
-<div class="ptitle">💵 Registrar Anticipo</div>
-<div class="psub">Guarda un pago anticipado como saldo a favor del cliente</div>
-<div class="fwrap" style="max-width:480px;">
-<div class="fwrap-title">Datos del Anticipo</div>
-<div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:20px;font-size:13px;line-height:2;">
-<div><b>Cliente:</b> <span id="ant-cliente-nombre"></span></div>
-<div style="color:var(--green);font-weight:700;"><b>Saldo a favor actual:</b> <span id="ant-saldo-favor">$ 0</span></div>
+<div class="ptitle">📋 Nota Crédito</div>
+<div class="psub">Registra un pago anticipado — el saldo se descuenta automáticamente en cada despacho</div>
+<div class="fwrap" style="max-width:560px;">
+<div class="fwrap-title">Nueva Nota Crédito</div>
+
+<!-- Info cliente y saldo actual -->
+<div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Cliente</div>
+      <div style="font-size:16px;font-weight:700;" id="ant-cliente-nombre">—</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Saldo a Favor Actual</div>
+      <div style="font-size:22px;font-weight:700;color:var(--green);font-family:var(--font-h);" id="ant-saldo-favor">$ 0</div>
+    </div>
+  </div>
 </div>
+
+<!-- Historial notas crédito -->
+<div id="ant-historial" style="margin-bottom:16px;"></div>
+
 <div class="frow">
 <div class="fg">
-<label>Monto del anticipo</label>
-<input type="number" id="ant-monto" placeholder="Ej: 500000">
+<label>Monto recibido *</label>
+<input type="number" id="ant-monto" placeholder="Ej: 500000" style="font-size:16px;font-weight:700;">
 </div>
 </div>
 <div class="frow">
@@ -513,20 +527,24 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <select id="ant-forma">
 <option value="Efectivo">Efectivo</option>
 <option value="Transferencia">Transferencia</option>
-<option value="Cheque">Cheque</option>
 <option value="Consignacion">Consignación</option>
+<option value="Cheque">Cheque</option>
 <option value="Otro">Otro</option>
 </select>
+</div>
+<div class="fg">
+<label>N° Consignación / Referencia</label>
+<input type="text" id="ant-ref" placeholder="Ej: 123456789">
 </div>
 </div>
 <div class="frow">
 <div class="fg">
 <label>Observación (opcional)</label>
-<input type="text" id="ant-obs" placeholder="Ej: Abono cuenta...">
+<input type="text" id="ant-obs" placeholder="Ej: Abono cuenta corriente...">
 </div>
 </div>
 <div class="frow">
-<button class="btn-primary" onclick="confirmarAnticipo()" style="flex:1;border:none;padding:10px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px;">✅ Guardar Anticipo</button>
+<button class="btn-primary" onclick="confirmarAnticipo()" style="flex:1;border:none;padding:12px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px;">📋 GENERAR NOTA CRÉDITO</button>
 <button class="btn-sec" onclick="go('cartera')" style="flex:1;">Cancelar</button>
 </div>
 </div>
@@ -1968,7 +1986,10 @@ function renderCartera(){
     var pagado = cvs.reduce(function(a,b){ return a+(b.totalPagado||0); },0);
     var saldo  = totalV - pagado;
     var nPend  = cvs.filter(function(v){ return (v.total-(v.totalPagado||0))>0; }).length;
-    return {nombre:nombre, cvs:cvs, totalV:totalV, pagado:pagado, saldo:saldo, nPend:nPend};
+    // Saldo a favor (notas crédito)
+    var cliObj = clientes.find(function(c){ return c.nombre===nombre; });
+    var saldoFavor = cliObj&&cliObj.anticipos ? cliObj.anticipos.reduce(function(a,b){ return a+(b.monto||0); },0) : 0;
+    return {nombre:nombre, cvs:cvs, totalV:totalV, pagado:pagado, saldo:saldo, nPend:nPend, saldoFavor:saldoFavor};
   });
 
   _carteraPagina = 1;
@@ -2038,6 +2059,10 @@ function renderCarteraCards(){
       '<div class="ccard-row"><span class="ccard-lbl">Total pagado</span><span class="ccard-val" style="color:var(--green)">'+fmt(d.pagado)+'</span></div>'+
       '<div class="ccard-row"><span class="ccard-lbl">Facturas pendientes</span><span class="ccard-val">'+d.nPend+'</span></div>'+
       '<div class="ccard-saldo '+(d.saldo<=0?'ccard-ok':'')+'">'+(d.saldo<=0?'✅ AL DÍA':fmt(d.saldo)+' DEBE')+'</div>'+
+      (d.saldoFavor>0?'<div style="background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.3);border-radius:8px;padding:6px 10px;margin-top:6px;display:flex;justify-content:space-between;align-items:center;">'+
+        '<span style="font-size:11px;color:var(--green);font-weight:700;">💳 Saldo a Favor</span>'+
+        '<span style="font-size:14px;font-weight:700;color:var(--green);">'+fmt(d.saldoFavor)+'</span>'+
+      '</div>':'+')+
       '<div style="margin-top:10px;display:flex;gap:6px;">'+
         '<button onclick="descargarExcelCliente(\''+nom+'\')" style="flex:1;background:var(--green);color:#fff;border:none;padding:7px 0;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">📊 Excel</button>'+
         '<button onclick="verClienteEnBusqueda(\''+nom+'\')" style="flex:1;background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue);padding:7px 0;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;">🔍 Ver</button>'+
@@ -2162,44 +2187,152 @@ function abrirAnticipo(clienteNombre){
   _anticipoClienteNombre = clienteNombre;
   document.getElementById('ant-cliente-nombre').textContent = clienteNombre;
   var cl = clientes.find(function(c){ return c.nombre===clienteNombre; });
-  var saldoFavor = cl && cl.anticipos ? cl.anticipos.reduce(function(a,b){ return a+(b.monto||0); },0) : 0;
-  document.getElementById('ant-saldo-favor').textContent = fmt(saldoFavor);
+  // Saldo = total anticipos - total usado en remisiones
+  var totalAnticipado = cl && cl.anticipos ? cl.anticipos.reduce(function(a,b){ return a+(b.monto||0); },0) : 0;
+  var totalUsado = movimientos.filter(function(m){
+    return m.tipo==='VENTA' && m.clienteNombre===clienteNombre && m.pagadoConNota;
+  }).reduce(function(a,m){ return a+(m.pagadoConNota||0); },0);
+  var saldoFavor = totalAnticipado - totalUsado;
+  document.getElementById('ant-saldo-favor').textContent = fmt(Math.max(0,saldoFavor));
   document.getElementById('ant-monto').value = '';
   document.getElementById('ant-obs').value   = '';
+  var refEl = document.getElementById('ant-ref'); if(refEl) refEl.value='';
+  // Mostrar historial de notas crédito
+  var histEl = document.getElementById('ant-historial');
+  if(histEl && cl && cl.anticipos && cl.anticipos.length){
+    var rows = cl.anticipos.slice().reverse().map(function(a, idx){
+      return '<tr>'+
+        '<td style="padding:6px 8px;font-size:12px;">'+a.fecha+'</td>'+
+        '<td style="padding:6px 8px;font-size:12px;font-weight:700;color:var(--accent);">'+(a.numero||'—')+'</td>'+
+        '<td style="padding:6px 8px;font-size:12px;">'+a.forma+'</td>'+
+        '<td style="padding:6px 8px;font-size:12px;">'+(a.ref||'—')+'</td>'+
+        '<td style="padding:6px 8px;font-size:12px;text-align:right;font-weight:700;color:var(--green);">'+fmt(a.monto)+'</td>'+
+        '<td style="padding:6px 8px;"><button onclick="imprimirNotaCreditoIdx(\''+clienteNombre+'\','+idx+')" style="background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue);padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;">🖨</button></td>'+
+      '</tr>';
+    }).join('');
+    histEl.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Historial Notas Crédito</div>'+
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'+
+      '<thead><tr style="background:var(--surface2);">'+
+        '<th style="padding:6px 8px;text-align:left;font-size:11px;">Fecha</th>'+
+        '<th style="padding:6px 8px;text-align:left;font-size:11px;">N° Nota</th>'+
+        '<th style="padding:6px 8px;text-align:left;font-size:11px;">Forma</th>'+
+        '<th style="padding:6px 8px;text-align:left;font-size:11px;">Referencia</th>'+
+        '<th style="padding:6px 8px;text-align:right;font-size:11px;">Valor</th>'+
+        '<th style="padding:6px 8px;font-size:11px;">Impr.</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  } else if(histEl) {
+    histEl.innerHTML = '<div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Sin notas crédito previas</div>';
+  }
   go('anticipo');
 }
 
 async function confirmarAnticipo(){
   var monto = parseFloat(document.getElementById('ant-monto').value)||0;
   var forma = document.getElementById('ant-forma').value;
-  var obs   = document.getElementById('ant-obs').value;
+  var obs   = (document.getElementById('ant-obs').value||'').trim();
+  var ref   = (document.getElementById('ant-ref')||{value:''}).value.trim();
   if(monto <= 0){ showToast('Ingrese un monto válido'); return; }
   var clienteNombre = _anticipoClienteNombre;
   var cl = clientes.find(function(c){ return c.nombre===clienteNombre; });
   if(!cl){ showToast('Cliente no encontrado'); return; }
+
+  // Generar número de nota crédito
+  var ahora = new Date();
+  var p = function(x){ return x<10?'0'+x:x; };
+  var nNota = 'NC-'+ahora.getFullYear()+p(ahora.getMonth()+1)+p(ahora.getDate())+'-'+Math.floor(1000+Math.random()*9000);
+  var horaNC = p(ahora.getHours())+':'+p(ahora.getMinutes());
+
+  var notaData = {
+    numero:nNota, fecha:today(), hora:horaNC,
+    monto:monto, forma:forma, ref:ref, obs:obs,
+    usuario:CU.user
+  };
+
   if(!cl.anticipos) cl.anticipos = [];
-  cl.anticipos.push({fecha:today(), monto:monto, forma:forma, obs:obs});
+  cl.anticipos.push(notaData);
   var fbId = cl._id || cl.id;
   if(fbId) await fbUpdate('clientes', fbId, {anticipos: cl.anticipos});
-  // Aplicar a remisiones pendientes más antiguas
-  var pendientes = movimientos.filter(function(m){
-    return m.tipo==='VENTA' && m.clienteNombre===clienteNombre && (m.estado==='Pendiente'||m.estado==='Parcial');
-  }).sort(function(a,b){ return a.fecha>b.fecha?1:-1; });
-  var restante = monto;
-  for(var i=0; i<pendientes.length; i++){
-    if(restante <= 0) break;
-    var mov = pendientes[i];
-    var saldo  = mov.total - (mov.totalPagado||0);
-    var aplicar = Math.min(restante, saldo);
-    mov.totalPagado = (mov.totalPagado||0) + aplicar;
-    restante -= aplicar;
-    mov.estado = mov.totalPagado >= mov.total ? 'Pagado' : 'Parcial';
-    var mfbId = mov._id || mov.id;
-    if(mfbId) await fbUpdate('movimientos', mfbId, {estado:mov.estado, totalPagado:mov.totalPagado, formaCobro:forma, fechaCobro:today()});
-  }
-  showToast('✅ Anticipo de '+fmt(monto)+' registrado para '+clienteNombre);
+
+  showToast('✅ Nota Crédito '+nNota+' generada — '+fmt(monto));
+
+  // Imprimir nota crédito
+  imprimirNotaCredito(notaData, clienteNombre);
+
+  // Log
+  fbUpdate('logActividad','log_'+Date.now(),{
+    usuario:CU.user, rol:CU.role, tipo:'NOTA_CREDITO', fecha:today(), hora:horaNC,
+    detalle:'Nota Crédito '+nNota+' — '+clienteNombre+' — '+fmt(monto), valor:monto
+  });
+
   go('cartera');
 }
+
+function imprimirNotaCredito(nota, clienteNombre){
+  if(typeof nota === 'string') try{ nota=JSON.parse(nota); }catch(e){ return; }
+  var cl = clientes.find(function(c){ return c.nombre===clienteNombre; });
+  var nit = cl&&cl.nit?cl.nit:'';
+  var tel = cl&&cl.tel?cl.tel:'';
+
+  var partes=(nota.fecha||'').split('-');
+  var mesesN=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  var fechaStr=partes.length===3?mesesN[parseInt(partes[1])-1]+' '+partes[2]+' DE '+partes[0]:nota.fecha;
+
+  function copia(label){
+    return '<div class="copia">'+
+      '<div style="text-align:center;padding-bottom:4px;border-bottom:2px solid #000;margin-bottom:4px;">'+
+        '<b style="font-size:13px;display:block;font-weight:900;">BROUS INVESTMENTS SAS</b>'+
+        '<span style="font-size:9px;display:block;">NIT: 901.471.724-2 | VEREDA PTO TEMBLEQUE | Movil: 3214528140</span>'+
+      '</div>'+
+      '<div style="text-align:center;font-size:13px;font-weight:900;padding:4px 0;border-bottom:2px solid #000;margin-bottom:5px;letter-spacing:1px;">'+
+        '📋 NOTA CRÉDITO '+nota.numero+
+      '</div>'+
+      '<table style="width:100%;border-collapse:collapse;margin-bottom:4px;">'+
+        '<tr><td style="font-size:10px;font-weight:900;padding:2px 0;width:85px;">FECHA:</td><td style="font-size:10px;">'+fechaStr+(nota.hora?' '+nota.hora:'')+'</td></tr>'+
+        '<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">CLIENTE:</td><td style="font-size:10px;">'+clienteNombre.toUpperCase()+'</td></tr>'+
+        (nit?'<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">CC/NIT:</td><td style="font-size:10px;">'+nit+'</td></tr>':'')+
+        '<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">FORMA PAGO:</td><td style="font-size:10px;">'+nota.forma+'</td></tr>'+
+        (nota.ref?'<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">REFERENCIA:</td><td style="font-size:10px;">'+nota.ref+'</td></tr>':'')+
+        (nota.obs?'<tr><td style="font-size:10px;font-weight:900;padding:2px 0;">OBS:</td><td style="font-size:10px;">'+nota.obs+'</td></tr>':'')+
+      '</table>'+
+      '<div style="border:2px solid #000;border-radius:4px;padding:10px;margin:6px 0;text-align:center;">'+
+        '<div style="font-size:10px;font-weight:700;margin-bottom:2px;">VALOR ACREDITADO</div>'+
+        '<div style="font-size:20px;font-weight:900;">$ '+Math.round(nota.monto).toLocaleString('es-CO')+'</div>'+
+        '<div style="font-size:9px;margin-top:3px;">Este valor se descontará de sus próximos despachos</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:6px;margin-top:8mm;">'+
+        '<div style="flex:1;text-align:center;font-size:9px;font-weight:700;"><div style="border-bottom:1.5px solid #000;height:10mm;margin-bottom:2px;"></div>Firma Cliente</div>'+
+        '<div style="flex:1;text-align:center;font-size:9px;font-weight:700;"><div style="border-bottom:1.5px solid #000;height:10mm;margin-bottom:2px;"></div>Firma Empresa</div>'+
+      '</div>'+
+      '<div style="font-size:8px;margin-top:3px;border-top:1px dashed #000;padding-top:2px;font-weight:700;">'+
+        nota.numero+' | '+label+
+      '</div>'+
+    '</div>';
+  }
+
+  var htmlStr='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<style>@page{size:80mm auto;margin:0!important;}html,body{margin:0!important;padding:0!important;font-family:Arial,sans-serif;color:#000;width:80mm;}'+
+    '.copia{padding:2mm 2.5mm 3mm 2.5mm;width:75mm;page-break-after:always;}.copia:last-child{page-break-after:avoid;}'+
+    '@media print{.no-print{display:none!important;}}'+
+    '</style></head><body>'+
+    copia('ORIGINAL — EMPRESA')+
+    copia('COPIA — CLIENTE')+
+    '<div class="no-print" style="text-align:center;padding:10px;display:flex;gap:8px;justify-content:center;">'+
+      '<button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:8px 24px;font-size:13px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 IMPRIMIR</button>'+
+      '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:8px 16px;font-size:13px;border-radius:4px;cursor:pointer;">Cerrar</button>'+
+    '</div></body></html>';
+
+  var win=window.open('','_blank','width=360,height=600,toolbar=0,menubar=0,location=0,scrollbars=1');
+  win.document.write(htmlStr); win.document.close(); win.focus();
+}
+window.imprimirNotaCredito = imprimirNotaCredito;
+function imprimirNotaCreditoIdx(clienteNombre, idx){
+  var cl = clientes.find(function(c){ return c.nombre===clienteNombre; });
+  if(!cl||!cl.anticipos) return;
+  var revAnts = cl.anticipos.slice().reverse();
+  var nota = revAnts[idx];
+  if(nota) imprimirNotaCredito(nota, clienteNombre);
+}
+window.imprimirNotaCreditoIdx = imprimirNotaCreditoIdx;
 window.abrirAnticipo    = abrirAnticipo;
 window.confirmarAnticipo= confirmarAnticipo;
 
