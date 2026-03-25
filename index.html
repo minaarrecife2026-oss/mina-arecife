@@ -293,6 +293,39 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 </div>
 </div>
 
+<!-- MODAL SALDO A FAVOR -->
+<div id="modal-saldo-favor" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+<div style="background:var(--card);border:2px solid var(--green);border-radius:16px;width:min(480px,100%);box-shadow:var(--shadow);padding:28px 28px 24px;">
+  <div style="text-align:center;margin-bottom:20px;">
+    <div style="font-size:32px;margin-bottom:8px;">💳</div>
+    <div style="font-family:var(--font-h);font-size:20px;font-weight:700;color:var(--green);">¡Cliente con Saldo a Favor!</div>
+    <div style="font-size:13px;color:var(--text3);margin-top:4px;">¿Deseas aplicar el saldo disponible a esta remisión?</div>
+  </div>
+  <div style="background:var(--surface2);border-radius:10px;padding:16px;margin-bottom:20px;">
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+      <span style="font-size:13px;color:var(--text3);">Cliente:</span>
+      <span style="font-size:13px;font-weight:700;" id="msf-cliente">—</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+      <span style="font-size:13px;color:var(--text3);">Saldo disponible:</span>
+      <span style="font-size:15px;font-weight:700;color:var(--green);" id="msf-saldo">$ 0</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+      <span style="font-size:13px;color:var(--text3);">Total remisión:</span>
+      <span style="font-size:15px;font-weight:700;" id="msf-remision">$ 0</span>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px;display:flex;justify-content:space-between;">
+      <span style="font-size:13px;font-weight:700;color:var(--gold);">Se aplicaría:</span>
+      <span style="font-size:18px;font-weight:700;color:var(--gold);font-family:var(--font-h);" id="msf-aplicar">$ 0</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;">
+    <button onclick="aplicarSaldoFavor()" style="flex:1;background:var(--green);color:#fff;border:none;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">✅ SÍ, APLICAR SALDO</button>
+    <button onclick="cancelarSaldoFavor()" style="flex:1;background:var(--surface2);color:var(--text2);border:1px solid var(--border);padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">No por ahora</button>
+  </div>
+</div>
+</div>
+
 <!-- APP -->
 <div id="app" style="display:none">
 <!-- TOPBAR -->
@@ -2678,8 +2711,8 @@ function initVenta(){
   document.getElementById('form-venta').style.display  = ok?'block':'none';
   fillSelects();
   document.getElementById('fg-codigo').style.display = 'none';
-  // Inicializar con 1 ítem dinámico
-  if(_itemsVenta.length===0) _itemsVenta = [{matId:'',cant:0,precio:0,desc:''}];
+  // Siempre reiniciar ítems al abrir nueva remisión
+  _itemsVenta = [{matId:'',cant:0,precio:0,desc:''}];
   renderItems();
   var remNum = movimientos.filter(function(m){ return m.tipo==='VENTA'; }).length + 1;
   document.getElementById('v-remision').value = String(remNum).padStart(8,'0');
@@ -2851,9 +2884,79 @@ async function regVenta(){
       detalle:'Venta '+mats+' a '+clienteNombre+' ('+fp+')',
       matId:mid, valor:total});
     showAlert('alrt-venta');
+
+    // ── Verificar saldo a favor del cliente ──
+    var cl = clientes.find(function(c){ return c.nombre===clienteNombre; });
+    if(cl && cl.anticipos && cl.anticipos.length){
+      var totalAnticipado = cl.anticipos.reduce(function(a,b){ return a+(b.monto||0); },0);
+      var totalUsado = cl.saldoUsado || 0;
+      var saldoDisp = totalAnticipado - totalUsado;
+      if(saldoDisp > 0){
+        // Guardar referencia al mov recién guardado
+        _movPendienteSaldo = {mov:mov, cl:cl, saldoDisp:saldoDisp, total:total};
+        // Mostrar modal de saldo
+        setTimeout(function(){ mostrarModalSaldo(clienteNombre, saldoDisp, total); }, 800);
+      }
+    }
     clearVenta();
   }
 }
+
+var _movPendienteSaldo = null;
+
+function mostrarModalSaldo(clienteNombre, saldoDisp, totalRemision){
+  var modal = document.getElementById('modal-saldo-favor');
+  if(!modal) return;
+  document.getElementById('msf-cliente').textContent  = clienteNombre;
+  document.getElementById('msf-saldo').textContent    = fmt(saldoDisp);
+  document.getElementById('msf-remision').textContent = fmt(totalRemision);
+  var aplicar = Math.min(saldoDisp, totalRemision);
+  document.getElementById('msf-aplicar').textContent  = fmt(aplicar);
+  modal.style.display = 'flex';
+}
+
+async function aplicarSaldoFavor(){
+  var modal = document.getElementById('modal-saldo-favor');
+  if(!modal || !_movPendienteSaldo) return;
+  var cl         = _movPendienteSaldo.cl;
+  var mov        = _movPendienteSaldo.mov;
+  var saldoDisp  = _movPendienteSaldo.saldoDisp;
+  var totalRem   = _movPendienteSaldo.total;
+  var aplicar    = Math.min(saldoDisp, totalRem);
+
+  // Actualizar saldoUsado en cliente
+  var nuevoUsado = (cl.saldoUsado||0) + aplicar;
+  cl.saldoUsado  = nuevoUsado;
+  var clId = cl._id||cl.id;
+  if(clId) await fbUpdate('clientes', clId, {saldoUsado: nuevoUsado});
+
+  // Actualizar totalPagado en movimiento
+  var nuevoTotalPagado = (mov.totalPagado||0) + aplicar;
+  var nuevoEstado = nuevoTotalPagado >= totalRem ? 'Pagado' : 'Parcial';
+  // Buscar mov en array
+  var movIdx = movimientos.findIndex(function(x){ return x.remision===mov.remision; });
+  if(movIdx>=0){
+    movimientos[movIdx].totalPagado = nuevoTotalPagado;
+    movimientos[movIdx].estado      = nuevoEstado;
+    var movId = movimientos[movIdx]._id||movimientos[movIdx].id;
+    if(movId) await fbUpdate('movimientos', movId, {totalPagado:nuevoTotalPagado, estado:nuevoEstado, pagadoConNota:aplicar});
+  }
+
+  showToast('✅ Saldo de '+fmt(aplicar)+' aplicado a remisión '+mov.remision);
+  modal.style.display = 'none';
+  _movPendienteSaldo = null;
+  renderCartera();
+  renderDash();
+}
+
+function cancelarSaldoFavor(){
+  var modal = document.getElementById('modal-saldo-favor');
+  if(modal) modal.style.display = 'none';
+  _movPendienteSaldo = null;
+}
+window.mostrarModalSaldo   = mostrarModalSaldo;
+window.aplicarSaldoFavor   = aplicarSaldoFavor;
+window.cancelarSaldoFavor  = cancelarSaldoFavor;
 function clearVenta(){
   var now2=new Date(); var pad2=function(n){return n<10?'0'+n:n;};
   var el_f=document.getElementById('v-fecha'); if(el_f) el_f.value=now2.getFullYear()+'-'+pad2(now2.getMonth()+1)+'-'+pad2(now2.getDate());
