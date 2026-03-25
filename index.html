@@ -345,6 +345,15 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <div class="kgrid" id="kgrid"></div>
 
 <!-- Resumen del día -->
+<!-- Resumen del día con selector de fecha -->
+<div style="margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+  <span style="font-size:12px;font-weight:700;color:var(--text2);">📅 Ver ventas del día:</span>
+  <input type="date" id="dash-fecha-sel"
+    style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 12px;font-size:13px;outline:none;cursor:pointer;"
+    onchange="renderResumeDia()">
+  <button onclick="document.getElementById('dash-fecha-sel').value=today();renderResumeDia();"
+    style="background:var(--accent);color:#000;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Hoy</button>
+</div>
 <div id="resumen-dia" style="margin-bottom:20px;"></div>
 
 <!-- Gráficas -->
@@ -643,7 +652,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <div class="twrap">
 <div class="thead2"><div class="ttitle">📋 Registro de Movimientos</div></div>
 <div class="tscroll"><table><thead><tr>
-<th>Fecha</th><th>Remisión</th><th>Cliente/Proveedor</th><th>Material</th><th>Cantidad</th><th>F.Pago</th><th>Total/Obs</th><th>Estado</th><th>Usuario</th><th>Imprimir</th><th>Editar</th><th>Anular</th>
+<th>Fecha</th><th>Remisión</th><th>Cliente/Proveedor</th><th>Material</th><th>Cantidad</th><th>F.Pago</th><th>Total/Obs</th><th>Estado</th><th>Usuario</th><th>Imprimir</th><th>Pago</th><th>Editar</th><th>Anular</th>
 </tr></thead><tbody id="tbl-movs"></tbody></table></div>
 </div>
 </div>
@@ -1293,7 +1302,9 @@ async function checkAndSeedData(){
       {id:'M009',nombre:'Grava 3/4',cat:'Grava',unidad:'m3',precio:57000,min:3},
       {id:'M010',nombre:'Grava 1 1/2',cat:'Grava',unidad:'m3',precio:57000,min:3},
       {id:'M011',nombre:'Mixto 1/2',cat:'Mixto',unidad:'m3',precio:57000,min:5},
+      {id:'M011',nombre:'Mixto 1/2',cat:'Mixto',unidad:'m3',precio:57000,min:5},
       {id:'M013',nombre:'Mixto 3/4',cat:'Mixto',unidad:'m3',precio:57000,min:5},
+      {id:'T001',nombre:'Transporte',cat:'Transporte',unidad:'viaje',precio:0,min:0},
       {id:'M012',nombre:'Piedra Filtro',cat:'Piedra',unidad:'m3',precio:57000,min:3},
       {id:'A001',nombre:'MDC-25',cat:'Asfalto',unidad:'ton',precio:850000,min:1},
       {id:'A002',nombre:'MDC-19',cat:'Asfalto',unidad:'ton',precio:800000,min:1},
@@ -1530,47 +1541,9 @@ function renderDash(){
   var pendiente    = ventasCart.reduce(function(a,b){ return a+Math.max(0,b.total-(b.totalPagado||0)); },0);
   var alertas      = materiales.filter(function(m){ return getStock(m.id||m._id)<=m.min; }).length;
   // ── Resumen del día ──
-  var hoy = today();
-  var ventasHoy   = ventas.filter(function(v){ return v.fecha===hoy; });
-  var efectivoHoy = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Efectivo')>=0; }).reduce(function(a,b){ return a+b.total; },0);
-  var donacionHoy  = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Donacion')>=0; }).reduce(function(a,b){ return a+b.total; },0);
-  var creditoHoy  = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Credito')>=0; }).reduce(function(a,b){ return a+b.total; },0);
-  var transHoy    = ventasHoy.filter(function(v){ return (v.fpago||'').indexOf('Transferencia')>=0||(v.fpago||'').indexOf('Consignacion')>=0; }).reduce(function(a,b){ return a+b.total; },0);
-  var totalHoy    = ventasHoy.reduce(function(a,b){ return a+b.total; },0);
-  var rdEl = document.getElementById('resumen-dia');
-  if(rdEl){
-    if(totalHoy>0){
-      var fechaHoyStr = new Date().toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'});
-      var html2 = '<div style="background:var(--card);border:2px solid var(--border);border-radius:14px;padding:18px 22px;margin-bottom:16px;">';
-      html2 += '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;">📅 VENTAS DE HOY — '+fechaHoyStr+' ('+ventasHoy.length+' remisión'+(ventasHoy.length!==1?'es':'')+')</div>';
-      html2 += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
-      html2 += '<div style="flex:1;min-width:130px;background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.3);border-radius:10px;padding:14px 16px;">';
-      html2 += '<div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💵 Efectivo</div>';
-      html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--green);">'+fmt(efectivoHoy)+'</div></div>';
-      if(donacionHoy>0){
-        html2 += '<div style="flex:1;min-width:130px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px 16px;">';
-        html2 += '<div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🎁 Donación</div>';
-        html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--amber);">'+fmt(donacionHoy)+'</div></div>';
-      }
-      if(creditoHoy>0){
-        html2 += '<div style="flex:1;min-width:130px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:14px 16px;">';
-        html2 += '<div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💳 Crédito</div>';
-        html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--purple);">'+fmt(creditoHoy)+'</div></div>';
-      }
-      if(transHoy>0){
-        html2 += '<div style="flex:1;min-width:130px;background:rgba(37,99,235,0.12);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:14px 16px;">';
-        html2 += '<div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🏦 Transf./Consig.</div>';
-        html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--blue);">'+fmt(transHoy)+'</div></div>';
-      }
-      html2 += '<div style="flex:1;min-width:130px;background:rgba(200,134,10,0.12);border:2px solid rgba(200,134,10,0.4);border-radius:10px;padding:14px 16px;">';
-      html2 += '<div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">📊 Total del Día</div>';
-      html2 += '<div style="font-family:var(--font-h);font-size:24px;font-weight:700;color:var(--gold);">'+fmt(totalHoy)+'</div></div>';
-      html2 += '</div></div>';
-      rdEl.innerHTML = html2;
-    } else {
-      rdEl.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 22px;margin-bottom:16px;color:var(--text3);font-size:13px;">📅 Hoy no hay ventas registradas todavía.</div>';
-    }
-  }
+  var selF = document.getElementById('dash-fecha-sel');
+  if(selF && !selF.value) selF.value = today();
+  renderResumeDia();
 
   document.getElementById('kgrid').innerHTML =
     kpi('Total Ventas',     fmt(totalVentas), 'acumulado',          'ck-gold')+
@@ -2421,10 +2394,11 @@ function renderMovs(){
       '<td>'+(m.anulada||m.estado==='Anulada'?'<span class="badge b-red" style="background:rgba(220,38,38,0.15);color:var(--red);">ANULADA</span>':estadoBadge(m.estado))+'</td>'+
       '<td style="color:var(--text3)">'+m.usuario+'</td>'+
       '<td>'+(m.tipo==='VENTA'?'<button class="btn btn-ghost btn-sm" onclick="printRemision(\''+rid+'\')">🖨 Imp.</button>':'—')+'</td>'+
+      '<td>'+(m.tipo==='VENTA'&&(m.total-(m.totalPagado||0))>0?'<button onclick="abrirCobroRapido(\''+rid+'\')" style="background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.4);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">💰 Pagar</button>':m.tipo==='VENTA'?'<span style="color:var(--green);font-size:11px;">✅ Al día</span>':'—')+'</td>'+
       '<td>'+(m.tipo==='VENTA'?'<button onclick="abrirEditarVenta(\''+rid+'\')" style="background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">✏️ Editar</button>':'—')+'</td>'+
       '<td>'+(CU.role==='admin'?'<button onclick="eliminarMovimiento(\''+rid+'\',\''+(m.remision||m._id||m.id)+'\')" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,.3);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">🚫 Anular</button>':'—')+'</td>'+
     '</tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="12">Sin movimientos</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="13">Sin movimientos</td></tr>';
 }
 function filterMovTab(t,el){ movTabFilter=t; document.querySelectorAll('.tabs .tab').forEach(function(x){ x.classList.remove('active'); }); el.classList.add('active'); renderMovs(); }
 function filterMovQ(v){ movQFilter=v; renderMovs(); }
@@ -2998,11 +2972,32 @@ function printRemision(movId){
     copia('ORIGINAL — EMPRESA')+
     copia('COPIA 1 — CLIENTE')+
     copia('COPIA 2 — CONDUCTOR')+
-    '<div class="no-print" style="text-align:center;padding:10px;display:flex;gap:8px;justify-content:center;">'+
-      '<button onclick="imprimirTermica()" style="background:#000;color:#fff;border:none;padding:10px 28px;font-size:13px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 IMPRIMIR 3 COPIAS</button>'+
-      '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:10px 16px;font-size:13px;border-radius:4px;cursor:pointer;">Cerrar</button>'+
+    '<div class="no-print" style="text-align:center;padding:10px;">'+
+      '<div style="margin-bottom:8px;font-size:12px;color:#666;">Selecciona qué copias imprimir:</div>'+
+      '<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">'+
+        '<button onclick="imprimirCopia(0)" style="background:#000;color:#fff;border:none;padding:8px 14px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 Original</button>'+
+        '<button onclick="imprimirCopia(1)" style="background:#333;color:#fff;border:none;padding:8px 14px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 Copia Cliente</button>'+
+        '<button onclick="imprimirCopia(2)" style="background:#555;color:#fff;border:none;padding:8px 14px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 Copia Conductor</button>'+
+        '<button onclick="imprimirTodas()" style="background:#c8860a;color:#000;border:none;padding:8px 14px;font-size:12px;font-weight:700;border-radius:4px;cursor:pointer;">🖨 Las 3</button>'+
+        '<button onclick="window.close()" style="background:#eee;color:#333;border:none;padding:8px 14px;font-size:12px;border-radius:4px;cursor:pointer;">Cerrar</button>'+
+      '</div>'+
     '</div>'+
-    '<script>function imprimirTermica(){var s=document.createElement("style");s.textContent="@page{margin:0!important;size:80mm auto;}body{margin:0!important;padding:0!important;}";document.head.appendChild(s);setTimeout(function(){window.print();},150);}<\/script>'+
+    '<script>'+
+    'function imprimirCopia(n){'+
+      'var cs=document.querySelectorAll(".copia");'+
+      'cs.forEach(function(c,i){c.style.display=i===n?"block":"none";});'+
+      'var s=document.createElement("style");'+
+      's.textContent="@page{margin:0!important;size:80mm auto;}body{margin:0!important;padding:0!important;}.copia{page-break-after:avoid!important;}";'+
+      'document.head.appendChild(s);'+
+      'setTimeout(function(){window.print();setTimeout(function(){cs.forEach(function(c){c.style.display="block";});},600);},150);'+
+    '}'+
+    'function imprimirTodas(){'+
+      'var s=document.createElement("style");'+
+      's.textContent="@page{margin:0!important;size:80mm auto;}body{margin:0!important;padding:0!important;}";'+
+      'document.head.appendChild(s);'+
+      'setTimeout(function(){window.print();},150);'+
+    '}'+
+    '<\/script>'+
     '</body></html>';
 
   var win = window.open('','_blank','width=360,height=750,toolbar=0,menubar=0,location=0,scrollbars=1');
@@ -4052,6 +4047,69 @@ function generarCertificado(clienteNombre){
   win.focus();
 }
 window.generarCertificado = generarCertificado;
+
+</script>
+</body>
+</html
+function renderResumeDia(){
+  var selF = document.getElementById('dash-fecha-sel');
+  var fecha = selF ? selF.value : today();
+  if(!fecha) fecha = today();
+  var todasV = movimientos.filter(function(m){ return m.tipo==='VENTA' && !m.anulada && m.estado!=='Anulada'; });
+  var ventasDia = todasV.filter(function(v){ return v.fecha===fecha; });
+  var efectivo = ventasDia.filter(function(v){ return (v.fpago||'').indexOf('Efectivo')>=0; }).reduce(function(a,b){ return a+b.total; },0);
+  var donacion = ventasDia.filter(function(v){ return (v.fpago||'').indexOf('Donacion')>=0; }).reduce(function(a,b){ return a+b.total; },0);
+  var credito  = ventasDia.filter(function(v){ return (v.fpago||'').indexOf('Credito')>=0; }).reduce(function(a,b){ return a+b.total; },0);
+  var trans    = ventasDia.filter(function(v){ return (v.fpago||'').indexOf('Transferencia')>=0||(v.fpago||'').indexOf('Consignacion')>=0; }).reduce(function(a,b){ return a+b.total; },0);
+  var total    = ventasDia.reduce(function(a,b){ return a+b.total; },0);
+  var rdEl = document.getElementById('resumen-dia');
+  if(!rdEl) return;
+  var partes = fecha.split('-');
+  var mesesN = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var fechaStr = partes.length===3 ? partes[2]+' de '+mesesN[parseInt(partes[1])-1]+' de '+partes[0] : fecha;
+  var esHoy = fecha===today();
+  if(ventasDia.length===0){
+    rdEl.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 20px;color:var(--text3);font-size:13px;">📅 No hay ventas registradas el <b>'+fechaStr+'</b></div>';
+    return;
+  }
+  var h = '<div style="background:var(--card);border:2px solid var(--border);border-radius:14px;padding:16px 20px;">';
+  h += '<div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;">📅 '+(esHoy?'HOY — ':'')+fechaStr.toUpperCase()+' &nbsp;·&nbsp; '+ventasDia.length+' remisión'+(ventasDia.length!==1?'es':'')+'</div>';
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+  h += '<div style="flex:1;min-width:120px;background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.3);border-radius:10px;padding:12px 14px;">';
+  h += '<div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">💵 Efectivo</div>';
+  h += '<div style="font-family:var(--font-h);font-size:22px;font-weight:700;color:var(--green);">'+fmt(efectivo)+'</div></div>';
+  if(donacion>0){
+    h += '<div style="flex:1;min-width:120px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px 14px;">';
+    h += '<div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">🎁 Donación</div>';
+    h += '<div style="font-family:var(--font-h);font-size:22px;font-weight:700;color:var(--amber);">'+fmt(donacion)+'</div></div>';
+  }
+  if(credito>0){
+    h += '<div style="flex:1;min-width:120px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:12px 14px;">';
+    h += '<div style="font-size:10px;color:var(--purple);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">💳 Crédito</div>';
+    h += '<div style="font-family:var(--font-h);font-size:22px;font-weight:700;color:var(--purple);">'+fmt(credito)+'</div></div>';
+  }
+  if(trans>0){
+    h += '<div style="flex:1;min-width:120px;background:rgba(37,99,235,0.12);border:1px solid rgba(37,99,235,0.3);border-radius:10px;padding:12px 14px;">';
+    h += '<div style="font-size:10px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">🏦 Transf./Consig.</div>';
+    h += '<div style="font-family:var(--font-h);font-size:22px;font-weight:700;color:var(--blue);">'+fmt(trans)+'</div></div>';
+  }
+  h += '<div style="flex:1;min-width:120px;background:rgba(200,134,10,0.15);border:2px solid rgba(200,134,10,0.4);border-radius:10px;padding:12px 14px;">';
+  h += '<div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;">📊 Total</div>';
+  h += '<div style="font-family:var(--font-h);font-size:22px;font-weight:700;color:var(--gold);">'+fmt(total)+'</div></div>';
+  h += '</div></div>';
+  rdEl.innerHTML = h;
+}
+window.renderResumeDia = renderResumeDia;
+
+function abrirCobroRapido(rid){
+  var m = movimientos.find(function(x){ return (x._id||x.id)===rid; });
+  if(!m) return;
+  // Pre-llenar el cobro con esta remisión
+  abrirCobro(m.remision);
+}
+window.abrirCobroRapido = abrirCobroRapido;
+
+
 
 </script>
 </body>
