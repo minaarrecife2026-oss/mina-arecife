@@ -2687,18 +2687,21 @@ window.onItemDescChange = onItemDescChange;
 
 function getItemsData(){
   // Leer valores actuales del DOM
-  return _itemsVenta.map(function(it,i){
-    var sel  = document.getElementById('item-mat-'+i);
+  var result = [];
+  for(var i=0; i<_itemsVenta.length; i++){
+    var sel    = document.getElementById('item-mat-'+i);
     var cantEl = document.getElementById('item-cant-'+i);
     var precEl = document.getElementById('item-prec-'+i);
     var descEl = document.getElementById('item-desc-'+i);
-    return {
-      matId:  sel?sel.value:it.matId,
-      cant:   +(cantEl?cantEl.value:0)||0,
-      precio: +(precEl?precEl.value:0)||0,
-      desc:   descEl?descEl.value:''
-    };
-  }).filter(function(it){ return it.matId && it.cant>0 && it.precio>0; });
+    var matId  = sel ? sel.value : _itemsVenta[i].matId;
+    var cant   = parseFloat(cantEl ? cantEl.value : _itemsVenta[i].cant) || 0;
+    var precio = parseFloat(precEl ? precEl.value : _itemsVenta[i].precio) || 0;
+    var desc   = descEl ? descEl.value : (_itemsVenta[i].desc||'');
+    if(matId && cant>0 && precio>0){
+      result.push({matId:matId, cant:cant, precio:precio, desc:desc});
+    }
+  }
+  return result;
 }
 
 window.agregarItem  = agregarItem;
@@ -2758,12 +2761,17 @@ function setIva(conIva){
 }
 function calcVenta(){
   var ivaRate = +(document.getElementById('v-iva-check').value)||0;
-  var c1=+document.getElementById('v-cant').value||0, p1=+document.getElementById('v-precio').value||0;
-  var c2=+(document.getElementById('v-cant2')||{value:0}).value||0, p2=+(document.getElementById('v-precio2')||{value:0}).value||0;
-  var c3=+(document.getElementById('v-cant3')||{value:0}).value||0, p3=+(document.getElementById('v-precio3')||{value:0}).value||0;
-  var sub = c1*p1 + c2*p2 + c3*p3;
-  var iva = sub*ivaRate;
-  var total = sub+iva;
+  // Calcular desde ítems dinámicos
+  var sub = 0;
+  _itemsVenta.forEach(function(it, i){
+    var cantEl = document.getElementById('item-cant-'+i);
+    var precEl = document.getElementById('item-prec-'+i);
+    var c = +(cantEl?cantEl.value:it.cant)||0;
+    var p = +(precEl?precEl.value:it.precio)||0;
+    sub += c * p;
+  });
+  var iva   = Math.round(sub * ivaRate);
+  var total = sub + iva;
   document.getElementById('r-sub').textContent       = fmt(sub);
   document.getElementById('r-iva').textContent       = fmt(iva);
   document.getElementById('r-iva-label').textContent = ivaRate>0?'IVA (19%)':'IVA (0%)';
@@ -2830,7 +2838,7 @@ async function regVenta(){
   }
   // Items ya obtenidos de getItemsData() arriba
   var ivaRate = +(document.getElementById('v-iva-check').value)||0;
-  var sub   = items.reduce(function(a,i){ return a+i.cant*i.precio; },0);
+  var sub   = items.reduce(function(a,i){ return a+(parseFloat(i.cant)||0)*(parseFloat(i.precio)||0); },0);
   var iva   = sub*ivaRate;
   var total = sub+iva;
   var clienteNombre = nombre||(getCli(cid)?getCli(cid).nombre:'Anonimo');
@@ -3230,8 +3238,11 @@ function printRemision(movId){
   else if(m.fpago==='Transferencia') tipoRem='REMISION TRANSFERENCIA';
 
   // Items - soporta legacy (1 item) y nuevo (items[])
-  var items = m.items && m.items.length ? m.items : [{matId:m.matId, cant:m.cant, precio:m.precio}];
-  var sub = items.reduce(function(a,i){ return a+i.cant*i.precio; },0);
+  var items = m.items && m.items.length ? m.items : [{matId:m.matId, cant:m.cant, precio:m.precio, desc:m.destino||''}];
+  var sub = items.reduce(function(a,i){ return a+(+(i.cant)||0)*(+(i.precio)||0); },0);
+  var ivaVal = m.iva || 0;
+  // Si total es 0 o indefinido, recalcular desde items
+  if(!m.total || m.total===0) m.total = sub + ivaVal;
 
   var filasItems = items.map(function(it, idx){
     var mat = getMat(it.matId);
