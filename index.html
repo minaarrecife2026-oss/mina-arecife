@@ -1266,12 +1266,21 @@ function setSyncStatus(state){
 // FIREBASE HELPERS
 // ======================================================
 async function fbAdd(col, data){
-  try{
-    setSyncStatus('syncing');
-    await window._addDoc(window._col(window._db, col), data);
-    setSyncStatus('online');
-    return true;
-  } catch(e){ setSyncStatus('error'); console.error(e); return false; }
+  var intentos = 0;
+  while(intentos < 3){
+    try{
+      setSyncStatus('syncing');
+      await window._addDoc(window._col(window._db, col), data);
+      setSyncStatus('online');
+      return true;
+    } catch(e){
+      intentos++;
+      console.error('fbAdd intento '+intentos, e);
+      if(intentos >= 3){ setSyncStatus('error'); return false; }
+      await new Promise(function(r){ setTimeout(r, 1000); });
+    }
+  }
+  return false;
 }
 async function fbDel(col, id){
   try{
@@ -2809,8 +2818,9 @@ window.toggleCodigo    = toggleCodigo;
 window.calcVenta       = calcVenta;
 
 async function regVenta(){
+  var err = document.getElementById('alrt-venta-err');
   var items  = getItemsData();
-  if(!items.length){ err.textContent='⚠ Agrega al menos un material con cantidad y precio'; err.style.display='block'; setTimeout(function(){ err.style.display='none'; },3000); return; }
+  if(!items.length){ if(err){ err.textContent='⚠ Agrega al menos un material con cantidad y precio'; err.style.display='block'; setTimeout(function(){ err.style.display='none'; },3000); } return; }
   var mid    = items[0].matId;
   var cant   = items[0].cant;
   var precio = items[0].precio;
@@ -2829,7 +2839,6 @@ async function regVenta(){
   var destino= document.getElementById('v-destino').value.trim();
   var obs    = document.getElementById('v-obs').value.trim();
   var cedula = document.getElementById('v-cedula')?document.getElementById('v-cedula').value.trim():'';
-  var err = document.getElementById('alrt-venta-err');
   if(!mid||!cant||!precio||!fp){
     err.textContent = '⚠ Completa Material 1, Cantidad, Precio y Forma de Pago';
     err.style.display = 'block';
