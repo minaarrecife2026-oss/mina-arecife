@@ -372,6 +372,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <!-- Botones superiores -->
 <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
   <button onclick="backupCompleto()" style="background:var(--green);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;">💾 Backup Excel Completo</button>
+  <button onclick="exportExcelPagos()" style="background:#0ea5e9;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;">📊 Excel de Pagos</button>
   <button onclick="go('notificaciones')" style="background:var(--purple);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;">📲 Notificaciones de Deuda</button>
   <button onclick="go('historial')" style="background:var(--blue);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;">📜 Historial de Cambios</button>
 </div>
@@ -782,9 +783,9 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
       </div>
       <div class="fg"><label>Estado</label>
         <select id="edit-estado">
-          <option value="Pagado">Pagado</option>
           <option value="Pendiente">Pendiente</option>
           <option value="Parcial">Parcial</option>
+          <option value="Pagado">Pagado</option>
         </select>
       </div>
     </div>
@@ -1897,6 +1898,92 @@ async function backupCompleto(){
 }
 window.backupCompleto = backupCompleto;
 
+async function exportExcelPagos(){
+  var ExcelJS = window.ExcelJS;
+  if(!ExcelJS){ alert('ExcelJS no cargó, intenta de nuevo.'); return; }
+  showToast('⏳ Generando Excel de Pagos...');
+  var workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Mina Arrecife';
+
+  // ── Hoja 1: Todos los pagos recibidos ──
+  var ws = workbook.addWorksheet('💰 Pagos Recibidos', {views:[{state:'frozen',ySplit:3}]});
+  ws.mergeCells('A1:H1');
+  ws.getCell('A1').value = 'BROUS INVESTMENTS SAS — REPORTE DE PAGOS';
+  ws.getCell('A1').font = {bold:true, size:14, color:{argb:'FFC8860A'}};
+  ws.getCell('A1').alignment = {horizontal:'center'};
+  ws.mergeCells('A2:H2');
+  ws.getCell('A2').value = 'Generado: '+new Date().toLocaleDateString('es-CO');
+  ws.getCell('A2').alignment = {horizontal:'center'};
+  ws.getRow(3).values = ['Fecha','Remisión','Cliente','Material','F.Pago','Total','Pagado','Saldo'];
+  ws.getRow(3).font = {bold:true, color:{argb:'FFFFFFFF'}};
+  ws.getRow(3).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF1A2235'}};
+
+  var pagados = movimientos.filter(function(m){
+    return m.tipo==='VENTA' && !m.anulada && m.estado!=='Anulada';
+  }).sort(function(a,b){ return a.fecha>b.fecha?1:-1; });
+
+  pagados.forEach(function(m){
+    var mat = getMat(m.matId);
+    var saldo = Math.max(0, m.total-(m.totalPagado||0));
+    ws.addRow([
+      m.fecha, m.remision, m.clienteNombre,
+      mat?mat.nombre:'?', m.fpago, m.total,
+      m.totalPagado||0, saldo
+    ]);
+  });
+
+  ws.columns = [
+    {key:'fecha',width:14},{key:'rem',width:14},{key:'cli',width:28},
+    {key:'mat',width:20},{key:'fp',width:16},{key:'total',width:16},
+    {key:'pagado',width:16},{key:'saldo',width:16}
+  ];
+  // Format currency
+  ['F','G','H'].forEach(function(col){
+    ws.getColumn(col).numFmt = '"$"#,##0';
+  });
+
+  // Totals row
+  var totalPend = pagados.reduce(function(a,m){ return a+Math.max(0,m.total-(m.totalPagado||0)); },0);
+  var totalPagado = pagados.reduce(function(a,m){ return a+(m.totalPagado||0); },0);
+  var totalVend = pagados.reduce(function(a,m){ return a+m.total; },0);
+  var tot = ws.addRow(['','','','','TOTALES',totalVend,totalPagado,totalPend]);
+  tot.font = {bold:true};
+  tot.getCell(5).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFC8860A'}};
+
+  // ── Hoja 2: Notas Crédito / Anticipos ──
+  var ws2 = workbook.addWorksheet('📋 Notas Crédito', {views:[{state:'frozen',ySplit:3}]});
+  ws2.mergeCells('A1:G1');
+  ws2.getCell('A1').value = 'NOTAS CRÉDITO — ANTICIPOS';
+  ws2.getCell('A1').font = {bold:true,size:13,color:{argb:'FF22C55E'}};
+  ws2.getCell('A1').alignment = {horizontal:'center'};
+  ws2.getRow(2).values = ['Fecha','N° Nota','Cliente','Forma Pago','Referencia','Monto','Obs'];
+  ws2.getRow(2).font = {bold:true,color:{argb:'FFFFFFFF'}};
+  ws2.getRow(2).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF1A2235'}};
+
+  clientes.forEach(function(cl){
+    if(cl.anticipos && cl.anticipos.length){
+      cl.anticipos.forEach(function(a){
+        ws2.addRow([a.fecha, a.numero||'—', cl.nombre, a.forma, a.ref||'', a.monto, a.obs||'']);
+      });
+    }
+  });
+  ws2.columns = [
+    {key:'fecha',width:14},{key:'num',width:18},{key:'cli',width:28},
+    {key:'fp',width:16},{key:'ref',width:18},{key:'monto',width:16},{key:'obs',width:24}
+  ];
+  ws2.getColumn('F').numFmt = '"$"#,##0';
+
+  // Download
+  var buf = await workbook.xlsx.writeBuffer();
+  var blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href=url; a.download='Pagos_MinaArrecife_'+today().replace(/-/g,'')+'.xlsx';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('✅ Excel de Pagos descargado');
+}
+window.exportExcelPagos = exportExcelPagos;
+
 // ======================================================
 // NOTIFICACIONES DE DEUDA
 // ======================================================
@@ -2566,7 +2653,7 @@ function renderMovs(){
       '<td>'+(m.tipo==='VENTA'?'<button class="btn btn-ghost btn-sm" onclick="printRemision(\''+rid+'\')">🖨 Imp.</button>':'—')+'</td>'+
       '<td>'+(m.tipo==='VENTA'&&(m.total-(m.totalPagado||0))>0?'<button onclick="abrirCobroRapido(\''+rid+'\')" style="background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.4);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">💰 Pagar</button>':m.tipo==='VENTA'?'<span style="color:var(--green);font-size:11px;">✅ Al día</span>':'—')+'</td>'+
       '<td>'+(m.tipo==='VENTA'?'<button onclick="abrirEditarVenta(\''+rid+'\')" style="background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">✏️ Editar</button>':'—')+'</td>'+
-      '<td>'+(CU.role==='gerencia'?'<button onclick="eliminarMovimiento(\''+rid+'\',\''+(m.remision||m._id||m.id)+'\')" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,.3);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">🚫 Anular</button>':'—')+'</td>'+
+      '<td>'+((CU&&CU.role==='gerencia')?'<button onclick="eliminarMovimiento(\''+rid+'\',\''+(m.remision||m._id||m.id)+'\')" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,.3);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">🚫 Anular</button>':'—')+'</td>'+
     '</tr>';
   }).join('') : '<tr class="empty-row"><td colspan="13">Sin movimientos</td></tr>';
 }
