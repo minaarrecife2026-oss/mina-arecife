@@ -705,7 +705,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <div class="twrap">
 <div class="thead2"><div class="ttitle">📋 Registro de Movimientos</div></div>
 <div class="tscroll"><table><thead><tr>
-<th>Fecha</th><th>Remisión</th><th>Cliente/Proveedor</th><th>Material</th><th>Cantidad</th><th>F.Pago</th><th>Total/Obs</th><th>Estado</th><th>Usuario</th><th>Imprimir</th><th>Pago</th><th>Editar</th><th>Anular</th>
+<th>Fecha</th><th>Remisión</th><th>Cliente/Proveedor</th><th>Material</th><th>Cantidad</th><th>F.Pago</th><th>Total/Obs</th><th>Estado</th><th>Usuario</th><th>Imprimir</th><th>Pago</th><th>Acciones</th>
 </tr></thead><tbody id="tbl-movs"></tbody></table></div>
 </div>
 </div>
@@ -1937,6 +1937,8 @@ async function exportExcelPagos(){
     {key:'mat',width:20},{key:'fp',width:16},{key:'total',width:16},
     {key:'pagado',width:16},{key:'saldo',width:16}
   ];
+  // Auto filter on row 3
+  ws.autoFilter = { from: 'A3', to: 'H3' };
   // Format currency
   ['F','G','H'].forEach(function(col){
     ws.getColumn(col).numFmt = '"$"#,##0';
@@ -2652,10 +2654,13 @@ function renderMovs(){
       '<td style="color:var(--text3)">'+m.usuario+'</td>'+
       '<td>'+(m.tipo==='VENTA'?'<button class="btn btn-ghost btn-sm" onclick="printRemision(\''+rid+'\')">🖨 Imp.</button>':'—')+'</td>'+
       '<td>'+(m.tipo==='VENTA'&&(m.total-(m.totalPagado||0))>0?'<button onclick="abrirCobroRapido(\''+rid+'\')" style="background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.4);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">💰 Pagar</button>':m.tipo==='VENTA'?'<span style="color:var(--green);font-size:11px;">✅ Al día</span>':'—')+'</td>'+
-      '<td>'+(m.tipo==='VENTA'?'<button onclick="abrirEditarVenta(\''+rid+'\')" style="background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">✏️ Editar</button>':'—')+'</td>'+
-      '<td>'+((CU&&CU.role==='gerencia')?'<button onclick="eliminarMovimiento(\''+rid+'\',\''+(m.remision||m._id||m.id)+'\')" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,.3);padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">🚫 Anular</button>':'—')+'</td>'+
+      '<td style="white-space:nowrap">'+
+        (m.tipo==='VENTA'?'<button onclick="abrirEditarVenta(\''+rid+'\')" style="background:var(--blue-dim);color:var(--blue);border:1px solid var(--blue);padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;margin-right:4px;">✏️ Editar</button>':'')+
+        ((CU&&CU.role==='gerencia'&&m.tipo==='VENTA'&&!m.anulada)?'<button onclick="eliminarMovimiento(\''+rid+'\',\''+(m.remision||m._id||m.id)+'\')" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,.3);padding:4px 8px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600;">🚫 Anular</button>':'')+
+        (m.tipo!=='VENTA'?'—':'')+
+      '</td>'+
     '</tr>';
-  }).join('') : '<tr class="empty-row"><td colspan="13">Sin movimientos</td></tr>';
+  }).join('') : '<tr class="empty-row"><td colspan="12">Sin movimientos</td></tr>';
 }
 function filterMovTab(t,el){ movTabFilter=t; document.querySelectorAll('.tabs .tab').forEach(function(x){ x.classList.remove('active'); }); el.classList.add('active'); renderMovs(); }
 function filterMovQ(v){ movQFilter=v; renderMovs(); }
