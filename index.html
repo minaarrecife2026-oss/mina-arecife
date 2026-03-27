@@ -1292,14 +1292,22 @@ async function fbDel(col, id){
   } catch(e){ setSyncStatus('error'); console.error(e); return false; }
 }
 async function fbUpdate(col, id, data){
-  try{
-    setSyncStatus('syncing');
-    var ref = window._doc(window._db, col, id);
-    // Use setDoc with merge since updateDoc is not imported separately
-    await window._setDoc(ref, data, { merge: true });
-    setSyncStatus('online');
-    return true;
-  } catch(e){ setSyncStatus('error'); console.error(e); return false; }
+  var intentos = 0;
+  while(intentos < 3){
+    try{
+      setSyncStatus('syncing');
+      var ref = window._doc(window._db, col, id);
+      await window._setDoc(ref, data, { merge: true });
+      setSyncStatus('online');
+      return true;
+    } catch(e){
+      intentos++;
+      console.error('fbUpdate intento '+intentos, e);
+      if(intentos >= 3){ setSyncStatus('error'); return false; }
+      await new Promise(function(r){ setTimeout(r, 1000); });
+    }
+  }
+  return false;
 }
 
 // ======================================================
@@ -3577,9 +3585,15 @@ async function guardarEditarVenta(){
     fbUpdate('logActividad','log_'+Date.now(),{usuario:CU.user,rol:CU.role,tipo:'EDICION',fecha:today(),hora:hora2,
       detalle:'Editó remisión '+(movimientos[idx]?movimientos[idx].remision:rid)+' cliente:'+updates.clienteNombre,valor:0});
   } else {
-    showToast('❌ Error al guardar — verifica conexión');
-    // Revert local
-    if(idx>=0) movimientos[idx] = Object.assign({},movimientos[idx]);
+    showToast('❌ Error al guardar — reintentando...');
+    // Retry once more
+    var ok2 = await fbUpdate('movimientos', rid, updates);
+    if(ok2){
+      showToast('✅ Remisión actualizada correctamente');
+      cerrarEditarVenta(); renderMovs(); renderCartera(); renderDash();
+    } else {
+      showToast('❌ No se pudo guardar. Verifica tu conexión a internet.');
+    }
   }
 }
 window.abrirEditarVenta  = abrirEditarVenta;
