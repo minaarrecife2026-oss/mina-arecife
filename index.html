@@ -2945,31 +2945,28 @@ async function regVenta(){
   var clienteNombre = nombre||(getCli(cid)?getCli(cid).nombre:'Anonimo');
   if(!cedula && getCli(cid) && getCli(cid).nit) cedula = getCli(cid).nit;
   // Determinar estado según formas de pago
-  var esCredito1 = fp==='Credito';
-  var esCredito2 = fp2==='Credito';
+  // Solo Efectivo y Donacion se marcan como Pagado inmediatamente
+  // Credito, Transferencia, Consignacion = Pendiente hasta confirmar
+  var FPAGO_INMEDIATO = ['Efectivo','Donacion'];
+  var esPagadoInmediato1 = FPAGO_INMEDIATO.indexOf(fp)>=0;
+  var esPagadoInmediato2 = FPAGO_INMEDIATO.indexOf(fp2)>=0;
   var totalPagadoInicial = 0;
   var estado;
   if(!fp2){
     // Solo un pago
-    estado = esCredito1 ? 'Pendiente' : 'Pagado';
-    totalPagadoInicial = esCredito1 ? 0 : (sub+iva);
+    estado = esPagadoInmediato1 ? 'Pagado' : 'Pendiente';
+    totalPagadoInicial = esPagadoInmediato1 ? (sub+iva) : 0;
   } else {
-    // Dos pagos — calcular cuánto se pagó ya
+    // Dos pagos
     var subTotal = sub+iva;
     if(monto1 > 0){
-      // Pago 1 en efectivo/transferencia = ya pagado
-      var pagadoYa = !esCredito1 ? monto1 : 0;
-      pagadoYa += (!esCredito2 && monto2 > 0) ? monto2 : 0;
-      if(monto1+monto2 >= subTotal){
-        // Suma de montos cubre el total
-        pagadoYa = !esCredito1 ? monto1 : 0;
-        pagadoYa += !esCredito2 ? (monto2||subTotal-monto1) : 0;
-      }
+      var pagadoYa = esPagadoInmediato1 ? monto1 : 0;
+      pagadoYa += (esPagadoInmediato2 && monto2>0) ? monto2 : 0;
       totalPagadoInicial = Math.min(pagadoYa, subTotal);
       estado = totalPagadoInicial >= subTotal ? 'Pagado' : totalPagadoInicial > 0 ? 'Parcial' : 'Pendiente';
     } else {
-      estado = (esCredito1 && esCredito2) ? 'Pendiente' : (!esCredito1 && !esCredito2) ? 'Pagado' : 'Parcial';
-      totalPagadoInicial = estado === 'Pagado' ? (sub+iva) : estado === 'Parcial' ? (sub+iva)/2 : 0;
+      estado = (esPagadoInmediato1 && esPagadoInmediato2) ? 'Pagado' : (esPagadoInmediato1||esPagadoInmediato2) ? 'Parcial' : 'Pendiente';
+      totalPagadoInicial = estado==='Pagado' ? subTotal : estado==='Parcial' ? subTotal/2 : 0;
     }
   }
   var d = document.getElementById('v-fecha').value || today();
