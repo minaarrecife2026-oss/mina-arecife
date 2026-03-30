@@ -3569,32 +3569,30 @@ async function guardarEditarVenta(){
   // Si cambia a Pagado, actualizar totalPagado
   if(nuevoEstado==='Pagado') updates.totalPagado = total;
   if(nuevoEstado==='Pendiente') updates.totalPagado = 0;
-  showToast('⏳ Guardando...');
-  // Actualizar local primero
+  // Actualizar local INMEDIATAMENTE
   var idx = movimientos.findIndex(function(x){ return (x._id||x.id)===rid; });
   if(idx>=0){ Object.assign(movimientos[idx], updates); }
-  // Luego Firebase
-  var ok = await fbUpdate('movimientos', rid, updates);
-  if(ok){
-    showToast('✅ Remisión actualizada correctamente');
-    cerrarEditarVenta();
-    renderMovs();
-    renderCartera();
-    renderDash();
-    var hora2=(function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x}; return p(n.getHours())+':'+p(n.getMinutes()); })();
-    fbUpdate('logActividad','log_'+Date.now(),{usuario:CU.user,rol:CU.role,tipo:'EDICION',fecha:today(),hora:hora2,
-      detalle:'Editó remisión '+(movimientos[idx]?movimientos[idx].remision:rid)+' cliente:'+updates.clienteNombre,valor:0});
-  } else {
-    showToast('❌ Error al guardar — reintentando...');
-    // Retry once more
-    var ok2 = await fbUpdate('movimientos', rid, updates);
-    if(ok2){
-      showToast('✅ Remisión actualizada correctamente');
-      cerrarEditarVenta(); renderMovs(); renderCartera(); renderDash();
-    } else {
-      showToast('❌ No se pudo guardar. Verifica tu conexión a internet.');
+  // Mostrar éxito y cerrar sin esperar Firebase
+  showToast('✅ Remisión actualizada');
+  cerrarEditarVenta();
+  renderMovs();
+  renderCartera();
+  renderDash();
+  // Sincronizar con Firebase en segundo plano
+  fbUpdate('movimientos', rid, updates).then(function(ok){
+    if(!ok){
+      // Reintentar silenciosamente
+      setTimeout(function(){
+        fbUpdate('movimientos', rid, updates).then(function(ok2){
+          if(ok2) console.log('Firebase sync OK en reintento');
+          else showToast('⚠️ Cambio guardado localmente — reconecta para sincronizar');
+        });
+      }, 3000);
     }
-  }
+  });
+  var hora2=(function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x}; return p(n.getHours())+':'+p(n.getMinutes()); })();
+  fbUpdate('logActividad','log_'+Date.now(),{usuario:CU.user,rol:CU.role,tipo:'EDICION',fecha:today(),hora:hora2,
+    detalle:'Editó remisión '+(movimientos[idx]?movimientos[idx].remision:rid)+' cliente:'+updates.clienteNombre,valor:0});
 }
 window.abrirEditarVenta  = abrirEditarVenta;
 window.cerrarEditarVenta = cerrarEditarVenta;
