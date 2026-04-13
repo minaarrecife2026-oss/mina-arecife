@@ -1185,7 +1185,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <!-- Firebase SDKs -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDocs, addDoc, deleteDoc, onSnapshot, setDoc, updateDoc, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, getDocs, addDoc, deleteDoc, onSnapshot, setDoc, updateDoc, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 try {
   const firebaseConfig = {
@@ -1197,15 +1197,7 @@ try {
     appId: "1:798151141344:web:76509a050e5ab22ecfed85"
   };
   const app = initializeApp(firebaseConfig);
-  // Habilitar caché offline — guarda datos localmente y sincroniza cuando hay conexión
-  let db;
-  try {
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
-    });
-  } catch(e) {
-    db = getFirestore(app);
-  }
+  const db = getFirestore(app);
   window._db = db;
   window._col = collection;
   window._doc = doc;
@@ -3095,7 +3087,7 @@ async function regVenta(){
   // Determinar estado según formas de pago
   // Solo Efectivo y Donacion se marcan como Pagado inmediatamente
   // Credito, Transferencia, Consignacion = Pendiente hasta confirmar
-  var FPAGO_INMEDIATO = ['Efectivo','Donacion'];
+  var FPAGO_INMEDIATO = ['Efectivo','Donacion']; // SOLO estos quedan Pagado automaticamente
   var esPagadoInmediato1 = FPAGO_INMEDIATO.indexOf(fp)>=0;
   var esPagadoInmediato2 = FPAGO_INMEDIATO.indexOf(fp2)>=0;
   var totalPagadoInicial = 0;
