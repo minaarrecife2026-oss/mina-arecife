@@ -1184,7 +1184,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 <!-- Firebase SDKs -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, getDocs, addDoc, deleteDoc, onSnapshot, setDoc, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, getDocs, addDoc, deleteDoc, onSnapshot, setDoc, updateDoc, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 try {
   const firebaseConfig = {
@@ -1205,6 +1205,7 @@ try {
   window._deleteDoc = deleteDoc;
   window._onSnapshot = onSnapshot;
   window._setDoc = setDoc;
+  window._updateDoc = updateDoc;
   window._query = query;
   window._orderBy = orderBy;
   window._fbReady = true;
@@ -1255,12 +1256,29 @@ function showToast(msg, ms){
 // ======================================================
 // SYNC STATUS
 // ======================================================
+var _reconnectTimer = null;
 function setSyncStatus(state){
   var dot = document.getElementById('sync-dot');
   var txt = document.getElementById('sync-txt');
   if(!dot) return;
   dot.className = 'sync-dot' + (state==='syncing'?' syncing': state==='error'?' error':'');
   txt.textContent = state==='syncing'?'Sincronizando...': state==='error'?'Sin conexión':'En línea';
+  // Auto-reconectar cuando pierde conexión
+  if(state==='error'){
+    if(!_reconnectTimer){
+      _reconnectTimer = setInterval(function(){
+        if(navigator.onLine && window._db){
+          clearInterval(_reconnectTimer);
+          _reconnectTimer = null;
+          setSyncStatus('online');
+          showToast('✅ Conexión restaurada');
+          if(CU) refreshCurrentPage();
+        }
+      }, 5000); // revisa cada 5 segundos
+    }
+  } else if(state==='online'){
+    if(_reconnectTimer){ clearInterval(_reconnectTimer); _reconnectTimer = null; }
+  }
 }
 
 // ======================================================
@@ -1297,14 +1315,27 @@ async function fbUpdate(col, id, data){
     try{
       setSyncStatus('syncing');
       var ref = window._doc(window._db, col, id);
-      await window._setDoc(ref, data, { merge: true });
+      // Usar updateDoc primero (más confiable para actualizar campos específicos)
+      if(window._updateDoc){
+        await window._updateDoc(ref, data);
+      } else {
+        await window._setDoc(ref, data, { merge: true });
+      }
       setSyncStatus('online');
       return true;
     } catch(e){
       intentos++;
-      console.error('fbUpdate intento '+intentos, e);
+      console.error('fbUpdate intento '+intentos+' error:', e.code, e.message);
+      // Si el doc no existe, usar setDoc
+      if(e.code === 'not-found'){
+        try{
+          await window._setDoc(window._doc(window._db, col, id), data);
+          setSyncStatus('online');
+          return true;
+        } catch(e2){ console.error('setDoc fallback error:', e2); }
+      }
       if(intentos >= 3){ setSyncStatus('error'); return false; }
-      await new Promise(function(r){ setTimeout(r, 1000); });
+      await new Promise(function(r){ setTimeout(r, 2000); });
     }
   }
   return false;
@@ -1331,10 +1362,7 @@ function initFirebaseListeners(){
     logActividad = snap.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
     logActividad.sort(function(a,b){ return (a.fecha+a.hora)<(b.fecha+b.hora)?-1:1; });
   });
-  window._onSnapshot(window._col(window._db,'sesiones'), function(snap){
-    sesiones = snap.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
-    sesiones.sort(function(a,b){ return (a.fecha+a.hora)<(b.fecha+b.hora)?-1:1; });
-  });
+  // sesiones: listener desactivado para mejorar rendimiento
 }
 
 async function checkAndSeedData(){
@@ -1461,7 +1489,7 @@ function doLogin(){
   document.getElementById('login').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   var h = hStr2(); var d = today();
-  fbAdd('sesiones',    {fecha:d, hora:h, usuario:CU.name, rol:CU.role});
+  // fbAdd sesiones desactivado para mejorar rendimiento
   fbAdd('logActividad',{fecha:d, hora:h, usuario:CU.name, rol:CU.role, tipo:'LOGIN', detalle:'Inicio de sesión', matId:'', valor:0});
   applyRole();
   fillSelects();
@@ -3560,7 +3588,7 @@ async function guardarEditarVenta(){
     total:         total,
     fpago:         document.getElementById('edit-fpago').value + ((document.getElementById('edit-fpago2')||{value:''}).value ? ' + '+(document.getElementById('edit-fpago2')||{value:''}).value : ''),
     estado:        nuevoEstado,
-    fecha:         document.getElementById('edit-fecha').value,
+    fecha:         document.getElementById('edit-fecha').value || today(),
     obs:           (document.getElementById('edit-obs').value||'').trim(),
     codigo:        (document.getElementById('edit-codigo').value||'').trim(),
     editadoPor:    CU.user,
@@ -3569,30 +3597,38 @@ async function guardarEditarVenta(){
   // Si cambia a Pagado, actualizar totalPagado
   if(nuevoEstado==='Pagado') updates.totalPagado = total;
   if(nuevoEstado==='Pendiente') updates.totalPagado = 0;
-  // Actualizar local INMEDIATAMENTE
-  var idx = movimientos.findIndex(function(x){ return (x._id||x.id)===rid; });
-  if(idx>=0){ Object.assign(movimientos[idx], updates); }
-  // Mostrar éxito y cerrar sin esperar Firebase
-  showToast('✅ Remisión actualizada');
-  cerrarEditarVenta();
-  renderMovs();
-  renderCartera();
-  renderDash();
-  // Sincronizar con Firebase en segundo plano
-  fbUpdate('movimientos', rid, updates).then(function(ok){
-    if(!ok){
-      // Reintentar silenciosamente
-      setTimeout(function(){
-        fbUpdate('movimientos', rid, updates).then(function(ok2){
-          if(ok2) console.log('Firebase sync OK en reintento');
-          else showToast('⚠️ Cambio guardado localmente — reconecta para sincronizar');
-        });
-      }, 3000);
-    }
-  });
-  var hora2=(function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x}; return p(n.getHours())+':'+p(n.getMinutes()); })();
-  fbUpdate('logActividad','log_'+Date.now(),{usuario:CU.user,rol:CU.role,tipo:'EDICION',fecha:today(),hora:hora2,
-    detalle:'Editó remisión '+(movimientos[idx]?movimientos[idx].remision:rid)+' cliente:'+updates.clienteNombre,valor:0});
+
+  // Mostrar guardando
+  showToast('⏳ Guardando en Firebase...');
+  var btnGuardar = document.querySelector('#modal-editar button[onclick="guardarEditarVenta()"]');
+  if(btnGuardar){ btnGuardar.disabled = true; btnGuardar.textContent = '⏳ Guardando...'; }
+
+  // Intentar guardar en Firebase hasta 5 veces
+  var guardado = false;
+  for(var intento=1; intento<=5; intento++){
+    var ok = await fbUpdate('movimientos', rid, updates);
+    if(ok){ guardado = true; break; }
+    if(intento < 5) await new Promise(function(r){ setTimeout(r, 2000); });
+  }
+
+  // Restaurar botón
+  if(btnGuardar){ btnGuardar.disabled = false; btnGuardar.textContent = '💾 GUARDAR CAMBIOS'; }
+
+  if(guardado){
+    // Actualizar local
+    var idx = movimientos.findIndex(function(x){ return (x._id||x.id)===rid; });
+    if(idx>=0){ Object.assign(movimientos[idx], updates); }
+    showToast('✅ Remisión actualizada y guardada en Firebase');
+    cerrarEditarVenta();
+    renderMovs();
+    renderCartera();
+    renderDash();
+    var hora2=(function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x}; return p(n.getHours())+':'+p(n.getMinutes()); })();
+    fbUpdate('logActividad','log_'+Date.now(),{usuario:CU.user,rol:CU.role,tipo:'EDICION',fecha:today(),hora:hora2,
+      detalle:'Editó remisión '+(updates.clienteNombre||rid),valor:0});
+  } else {
+    showToast('❌ Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.');
+  }
 }
 window.abrirEditarVenta  = abrirEditarVenta;
 window.cerrarEditarVenta = cerrarEditarVenta;
@@ -4559,6 +4595,17 @@ function renderResumeDia(){
   rdEl.innerHTML = h;
 }
 window.renderResumeDia = renderResumeDia;
+
+// Detectar cambios de conexión del navegador
+window.addEventListener('online', function(){
+  setSyncStatus('online');
+  showToast('✅ Conexión restaurada');
+  if(CU) refreshCurrentPage();
+});
+window.addEventListener('offline', function(){
+  setSyncStatus('error');
+  showToast('⚠️ Sin conexión a internet');
+});
 
 function abrirCobroRapido(rid){
   var m = movimientos.find(function(x){ return (x._id||x.id)===rid; });
