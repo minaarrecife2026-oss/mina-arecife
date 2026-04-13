@@ -1291,6 +1291,56 @@ function setSyncStatus(state){
 }
 
 // ======================================================
+// COLA DE ESCRITURAS PENDIENTES
+// ======================================================
+var _colaPendiente = []; // {col, id, data, tipo}
+
+function guardarEnCola(col, id, data){
+  // Guardar en localStorage para persistir entre recargas
+  try{
+    var cola = JSON.parse(localStorage.getItem('_colaPendiente')||'[]');
+    cola.push({col:col, id:id, data:data, ts:Date.now()});
+    localStorage.setItem('_colaPendiente', JSON.stringify(cola));
+    console.log('📥 Guardado en cola pendiente:', col, id);
+  } catch(e){ console.error('Error cola:', e); }
+}
+
+async function sincronizarCola(){
+  try{
+    var cola = JSON.parse(localStorage.getItem('_colaPendiente')||'[]');
+    if(!cola.length) return;
+    console.log('🔄 Sincronizando '+cola.length+' cambios pendientes...');
+    var exito = [];
+    for(var i=0; i<cola.length; i++){
+      var item = cola[i];
+      try{
+        var ref = window._doc(window._db, item.col, item.id);
+        await window._setDoc(ref, item.data);
+        exito.push(i);
+        console.log('✅ Sincronizado:', item.col, item.id);
+      } catch(e){ console.error('Error sync:', e); break; }
+    }
+    // Remover los exitosos
+    if(exito.length > 0){
+      var nuevaCola = cola.filter(function(_,idx){ return exito.indexOf(idx)<0; });
+      localStorage.setItem('_colaPendiente', JSON.stringify(nuevaCola));
+      if(exito.length > 0) showToast('✅ '+exito.length+' cambio(s) sincronizado(s)');
+      if(CU) refreshCurrentPage();
+    }
+  } catch(e){ console.error('sincronizarCola error:', e); }
+}
+
+// Sincronizar cola cuando vuelve la conexión
+window.addEventListener('online', function(){
+  setTimeout(sincronizarCola, 2000);
+});
+
+// Verificar cola al iniciar
+setTimeout(function(){
+  if(window._db){ sincronizarCola(); }
+}, 5000);
+
+// ======================================================
 // FIREBASE HELPERS
 // ======================================================
 async function fbAdd(col, data){
@@ -1354,7 +1404,13 @@ async function fbUpdate(col, id, data){
     } catch(e){
       intentos++;
       console.error('fbUpdate intento '+intentos+':', e.message);
-      if(intentos >= 3){ setSyncStatus('error'); return false; }
+      if(intentos >= 3){
+        setSyncStatus('error');
+        // Guardar en cola para sincronizar después
+        guardarEnCola(col, id, docCompleto);
+        showToast('⚠️ Sin conexión — cambio guardado para sincronizar');
+        return false;
+      }
       await new Promise(function(r){ setTimeout(r, 1500); });
     }
   }
@@ -3670,21 +3726,23 @@ async function guardarEditarVenta(){
   // Restaurar botón
   if(btnGuardar){ btnGuardar.disabled = false; btnGuardar.textContent = '💾 GUARDAR CAMBIOS'; }
 
+  // Actualizar local siempre
+  var idx = movimientos.findIndex(function(x){ return (x._id||x.id)===rid; });
+  if(idx>=0){ Object.assign(movimientos[idx], updates); }
+
   if(guardado){
-    // Actualizar local
-    var idx = movimientos.findIndex(function(x){ return (x._id||x.id)===rid; });
-    if(idx>=0){ Object.assign(movimientos[idx], updates); }
-    showToast('✅ Remisión actualizada y guardada en Firebase');
-    cerrarEditarVenta();
-    renderMovs();
-    renderCartera();
-    renderDash();
-    var hora2=(function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x}; return p(n.getHours())+':'+p(n.getMinutes()); })();
-    fbUpdate('logActividad','log_'+Date.now(),{usuario:CU.user,rol:CU.role,tipo:'EDICION',fecha:today(),hora:hora2,
-      detalle:'Editó remisión '+(updates.clienteNombre||rid),valor:0});
+    showToast('✅ Remisión actualizada correctamente');
   } else {
-    showToast('❌ Sin conexión a Firebase. Verifica tu internet e intenta de nuevo.');
+    // Ya se guardó en cola — mostrar éxito igual
+    showToast('⚠️ Guardado localmente — se sincronizará cuando haya conexión');
   }
+  cerrarEditarVenta();
+  renderMovs();
+  renderCartera();
+  renderDash();
+  var hora2=(function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x}; return p(n.getHours())+':'+p(n.getMinutes()); })();
+  fbUpdate('logActividad','log_'+Date.now(),{usuario:CU.user,rol:CU.role,tipo:'EDICION',fecha:today(),hora:hora2,
+    detalle:'Editó remisión '+(updates.clienteNombre||rid),valor:0});
 }
 window.abrirEditarVenta  = abrirEditarVenta;
 window.cerrarEditarVenta = cerrarEditarVenta;
