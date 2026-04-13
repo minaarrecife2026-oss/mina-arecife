@@ -1289,12 +1289,15 @@ async function fbAdd(col, data){
   while(intentos < 3){
     try{
       setSyncStatus('syncing');
-      await window._addDoc(window._col(window._db, col), data);
+      await Promise.race([
+        window._addDoc(window._col(window._db, col), data),
+        new Promise(function(_,reject){ setTimeout(function(){ reject(new Error('timeout')); }, 8000); })
+      ]);
       setSyncStatus('online');
       return true;
     } catch(e){
       intentos++;
-      console.error('fbAdd intento '+intentos, e);
+      console.error('fbAdd intento '+intentos+':', e.message);
       if(intentos >= 3){ setSyncStatus('error'); return false; }
       await new Promise(function(r){ setTimeout(r, 1000); });
     }
@@ -1327,20 +1330,23 @@ async function fbUpdate(col, id, data){
   }
 
   var intentos = 0;
-  while(intentos < 5){
+  while(intentos < 3){
     try{
       setSyncStatus('syncing');
       var ref = window._doc(window._db, col, id);
-      // setDoc completo — reemplaza el documento entero con los datos actualizados
-      await window._setDoc(ref, docCompleto);
+      // Timeout de 8 segundos por intento
+      var resultado = await Promise.race([
+        window._setDoc(ref, docCompleto),
+        new Promise(function(_,reject){ setTimeout(function(){ reject(new Error('timeout')); }, 8000); })
+      ]);
       setSyncStatus('online');
-      console.log('✅ fbUpdate OK en intento '+(intentos+1));
+      console.log('✅ fbUpdate OK intento '+(intentos+1));
       return true;
     } catch(e){
       intentos++;
-      console.error('fbUpdate intento '+intentos+' error:', e.code, e.message);
-      if(intentos >= 5){ setSyncStatus('error'); return false; }
-      await new Promise(function(r){ setTimeout(r, 2000); });
+      console.error('fbUpdate intento '+intentos+':', e.message);
+      if(intentos >= 3){ setSyncStatus('error'); return false; }
+      await new Promise(function(r){ setTimeout(r, 1500); });
     }
   }
   return false;
@@ -3614,7 +3620,7 @@ async function guardarEditarVenta(){
   if(nuevoEstado==='Pendiente') updates.totalPagado = 0;
 
   // Mostrar guardando
-  showToast('⏳ Guardando en Firebase...');
+  showToast('⏳ Guardando... (máx. 30 seg)');
   var btnGuardar = document.querySelector('#modal-editar button[onclick="guardarEditarVenta()"]');
   if(btnGuardar){ btnGuardar.disabled = true; btnGuardar.textContent = '⏳ Guardando...'; }
 
