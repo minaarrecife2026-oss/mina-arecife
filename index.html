@@ -336,6 +336,7 @@ z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:320p
 </div>
 <div class="tright">
 <div class="sync-status" onclick="intentarReconectar()" style="cursor:pointer;" title="Clic para reconectar"><span class="sync-dot" id="sync-dot"></span><span id="sync-txt">En línea</span></div>
+<button onclick="recargarDatos()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:4px;" title="Actualizar datos">🔄</button>
 <div class="tbadge" id="top-user"></div>
 <div class="trole" id="top-role"></div>
 <button class="tlogout" onclick="doLogout()">Salir</button>
@@ -1363,26 +1364,52 @@ async function fbUpdate(col, id, data){
 // ======================================================
 // INIT — cargar datos y escuchar cambios
 // ======================================================
-function initFirebaseListeners(){
-  window._onSnapshot(window._col(window._db,'materiales'), function(snap){
-    materiales = snap.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
-    if(CU) refreshCurrentPage();
-  });
-  window._onSnapshot(window._col(window._db,'clientes'), function(snap){
-    clientes = snap.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
-    if(CU) refreshCurrentPage();
-  });
-  window._onSnapshot(window._col(window._db,'movimientos'), function(snap){
-    movimientos = snap.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
+async function initFirebaseListeners(){
+  // Cargar datos UNA VEZ con getDocs en lugar de onSnapshot en tiempo real
+  // Esto reduce lecturas de miles a solo las necesarias
+  try {
+    var [snapMat, snapCli, snapMov, snapLog] = await Promise.all([
+      window._getDocs(window._col(window._db,'materiales')),
+      window._getDocs(window._col(window._db,'clientes')),
+      window._getDocs(window._col(window._db,'movimientos')),
+      window._getDocs(window._col(window._db,'logActividad'))
+    ]);
+    materiales  = snapMat.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
+    clientes    = snapCli.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
+    movimientos = snapMov.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
     movimientos.sort(function(a,b){ return (a.fecha+a.hora)<(b.fecha+b.hora)?-1:1; });
-    if(CU) refreshCurrentPage();
-  });
-  window._onSnapshot(window._col(window._db,'logActividad'), function(snap){
-    logActividad = snap.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
+    logActividad= snapLog.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
     logActividad.sort(function(a,b){ return (a.fecha+a.hora)<(b.fecha+b.hora)?-1:1; });
-  });
-  // sesiones: listener desactivado para mejorar rendimiento
+    setSyncStatus('online');
+    if(CU) refreshCurrentPage();
+  } catch(e){
+    console.error('initFirebaseListeners error:', e);
+    setSyncStatus('error');
+  }
 }
+
+// Recargar datos desde Firebase
+async function recargarDatos(){
+  try{
+    setSyncStatus('syncing');
+    var [snapMat, snapCli, snapMov] = await Promise.all([
+      window._getDocs(window._col(window._db,'materiales')),
+      window._getDocs(window._col(window._db,'clientes')),
+      window._getDocs(window._col(window._db,'movimientos'))
+    ]);
+    materiales  = snapMat.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
+    clientes    = snapCli.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
+    movimientos = snapMov.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
+    movimientos.sort(function(a,b){ return (a.fecha+a.hora)<(b.fecha+b.hora)?-1:1; });
+    setSyncStatus('online');
+    if(CU) refreshCurrentPage();
+    showToast('✅ Datos actualizados');
+  } catch(e){
+    setSyncStatus('error');
+    showToast('❌ Error al cargar datos');
+  }
+}
+window.recargarDatos = recargarDatos;
 
 async function checkAndSeedData(){
   var snap = await window._getDocs(window._col(window._db,'materiales'));
