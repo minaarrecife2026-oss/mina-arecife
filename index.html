@@ -3135,13 +3135,22 @@ async function regVenta(){
     estado:estado, usuario:CU.name, totalPagado:totalPagadoInicial,
     monto1:monto1||0, monto2:monto2||0
   };
+  // 1. Guardar en Firebase
   var ok = await fbAdd('movimientos', mov);
   if(ok){
+    // 2. Agregar a memoria local para verlo inmediatamente
+    movimientos.push(Object.assign({_id: 'local_'+Date.now()}, mov));
+    movimientos.sort(function(a,b){ return (a.fecha+a.hora)<(b.fecha+b.hora)?-1:1; });
+
     var mats = items.map(function(i){ return fmtN(i.cant)+' '+(getMat(i.matId)?getMat(i.matId).nombre:''); }).join(', ');
     fbAdd('logActividad',{fecha:d,hora:h,usuario:CU.name,rol:CU.role,tipo:'VENTA',
       detalle:'Venta '+mats+' a '+clienteNombre+' ('+fp+')',
       matId:mid, valor:total});
     showAlert('alrt-venta');
+    showToast('✅ Remisión '+remNum+' guardada en Firebase');
+
+    // Recargar desde Firebase para obtener ID real
+    setTimeout(recargarDatos, 2000);
 
     // ── Verificar saldo a favor del cliente ──
     var cl = clientes.find(function(c){ return c.nombre===clienteNombre; });
@@ -3150,13 +3159,13 @@ async function regVenta(){
       var totalUsado = cl.saldoUsado || 0;
       var saldoDisp = totalAnticipado - totalUsado;
       if(saldoDisp > 0){
-        // Guardar referencia al mov recién guardado
         _movPendienteSaldo = {mov:mov, cl:cl, saldoDisp:saldoDisp, total:total};
-        // Mostrar modal de saldo
         setTimeout(function(){ mostrarModalSaldo(clienteNombre, saldoDisp, total); }, 800);
       }
     }
     clearVenta();
+  } else {
+    showToast('❌ Error al guardar en Firebase. Verifica tu conexión.');
   }
 }
 
