@@ -1258,6 +1258,20 @@ function showToast(msg, ms){
 // SYNC STATUS
 // ======================================================
 var _reconnectTimer = null;
+var _autoReconnect = null;
+
+// Intentar reconectar a Firebase cada 15 segundos si está desconectado
+function iniciarAutoReconexion(){
+  if(_autoReconnect) return;
+  _autoReconnect = setInterval(function(){
+    var txt = document.getElementById('sync-txt');
+    if(txt && txt.textContent !== 'En línea' && window._db){
+      recargarDatos();
+    }
+  }, 15000);
+}
+setTimeout(iniciarAutoReconexion, 5000);
+
 function setSyncStatus(state){
   var dot = document.getElementById('sync-dot');
   var txt = document.getElementById('sync-txt');
@@ -2824,8 +2838,8 @@ async function eliminarMovimiento(id, remision){
   if(!confirm('⚠️ ¿Anular la remisión ' + remision + '?\n\nQuedará como ANULADA y no sumará en los totales.')) return;
   // Anular: marcar como ANULADA en Firebase, NO eliminar
   var mov = movimientos.find(function(x){ return (x._id||x.id)===id; });
-  if(mov){ mov.estado='Anulada'; mov.anulada=true; mov.total=0; mov.iva=0; }
-  await fbUpdate('movimientos', id, {estado:'Anulada', anulada:true, total:0, iva:0, totalPagado:0,
+  if(mov){ mov.estado='Anulada'; mov.anulada=true; mov.totalPagado=0; }
+  await fbUpdate('movimientos', id, {estado:'Anulada', anulada:true, totalPagado:0,
     anuladoPor:CU.user, anuladoEn:new Date().toISOString()});
   showToast('🚫 Remisión ' + remision + ' anulada');
   renderMovs();
