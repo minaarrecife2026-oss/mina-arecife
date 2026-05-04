@@ -1413,14 +1413,16 @@ async function fbUpdate(col, id, data){
 // INIT — cargar datos y escuchar cambios
 // ======================================================
 async function initFirebaseListeners(){
-  // Cargar datos UNA VEZ con getDocs en lugar de onSnapshot en tiempo real
-  // Esto reduce lecturas de miles a solo las necesarias
   try {
-    var [snapMat, snapCli, snapMov, snapLog] = await Promise.all([
-      window._getDocs(window._col(window._db,'materiales')),
-      window._getDocs(window._col(window._db,'clientes')),
-      window._getDocs(window._col(window._db,'movimientos')),
-      window._getDocs(window._col(window._db,'logActividad'))
+    // Timeout de 10 segundos para cargar datos
+    var [snapMat, snapCli, snapMov, snapLog] = await Promise.race([
+      Promise.all([
+        window._getDocs(window._col(window._db,'materiales')),
+        window._getDocs(window._col(window._db,'clientes')),
+        window._getDocs(window._col(window._db,'movimientos')),
+        window._getDocs(window._col(window._db,'logActividad'))
+      ]),
+      new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timeout')); },10000); })
     ]);
     materiales  = snapMat.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
     clientes    = snapCli.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
@@ -1537,20 +1539,30 @@ function mostrarLogin(){
   document.getElementById('login').style.display   = 'flex';
 }
 
-function startApp(){
+async function startApp(){
   if(window._fbFailed || !window._db){
     loadOfflineData();
     mostrarLogin();
     setSyncStatus('error');
     return;
   }
-  // Mostrar login de inmediato — no bloquear en Firebase
+  // Cargar datos de Firebase PRIMERO, luego mostrar login
+  setSyncStatus('syncing');
+  try {
+    await initFirebaseListeners();
+    setSyncStatus('online');
+  } catch(e){
+    console.warn('Firebase load error:', e);
+    loadOfflineData();
+    setSyncStatus('error');
+  }
   mostrarLogin();
-  initFirebaseListeners();
-  // Seed data en segundo plano sin bloquear
+  // Seed data en segundo plano
   checkAndSeedData().catch(function(e){
-    console.warn('Seed error (non-critical):', e);
+    console.warn('Seed error:', e);
   });
+  // Sincronizar cola pendiente
+  setTimeout(sincronizarCola, 2000);
 }
 
 if(window._fbReady){ startApp(); }
@@ -3702,39 +3714,46 @@ async function guardarEditarVenta(){
   if(nuevoEstado==='Pagado') updates.totalPagado = total;
   if(nuevoEstado==='Pendiente') updates.totalPagado = 0;
 
-  // Mostrar guardando
-  showToast('⏳ Guardando... (máx. 30 seg)');
-  var btnGuardar = document.querySelector('#modal-editar button[onclick="guardarEditarVenta()"]');
-  if(btnGuardar){ btnGuardar.disabled = true; btnGuardar.textContent = '⏳ Guardando...'; }
-
-  // Intentar guardar en Firebase hasta 5 veces
-  var guardado = false;
-  for(var intento=1; intento<=5; intento++){
-    var ok = await fbUpdate('movimientos', rid, updates);
-    if(ok){ guardado = true; break; }
-    if(intento < 5) await new Promise(function(r){ setTimeout(r, 2000); });
-  }
-
-  // Restaurar botón
-  if(btnGuardar){ btnGuardar.disabled = false; btnGuardar.textContent = '💾 GUARDAR CAMBIOS'; }
-
-  // Actualizar local siempre
+  // 1. Actualizar LOCAL inmediatamente
   var idx = movimientos.findIndex(function(x){ return (x._id||x.id)===rid; });
   if(idx>=0){ Object.assign(movimientos[idx], updates); }
 
-  if(guardado){
-    showToast('✅ Remisión actualizada correctamente');
-  } else {
-    // Ya se guardó en cola — mostrar éxito igual
-    showToast('⚠️ Guardado localmente — se sincronizará cuando haya conexión');
-  }
+  // 2. Cerrar modal y actualizar pantalla SIN esperar Firebase
+  showToast('✅ Remisión actualizada');
   cerrarEditarVenta();
   renderMovs();
   renderCartera();
   renderDash();
+
+  // 3. Guardar en Firebase en SEGUNDO PLANO
   var hora2=(function(){ var n=new Date(); var p=function(x){return x<10?'0'+x:x}; return p(n.getHours())+':'+p(n.getMinutes()); })();
-  fbUpdate('logActividad','log_'+Date.now(),{usuario:CU.user,rol:CU.role,tipo:'EDICION',fecha:today(),hora:hora2,
-    detalle:'Editó remisión '+(updates.clienteNombre||rid),valor:0});
+  (async function(){
+    var ref = window._doc(window._db, 'movimientos', rid);
+    var docFull = Object.assign({}, movimientos[idx]||{}, updates);
+    delete docFull._id; delete docFull.id;
+    var intentos = 0;
+    var ok = false;
+    while(intentos < 10 && !ok){
+      try{
+        await Promise.race([
+          window._setDoc(ref, docFull),
+          new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timeout')); },5000); })
+        ]);
+        ok = true;
+        showToast('☁️ Sincronizado con Firebase');
+      } catch(e){
+        intentos++;
+        await new Promise(function(r){ setTimeout(r,3000); });
+      }
+    }
+    if(!ok){
+      // Guardar en cola local como respaldo
+      guardarEnCola('movimientos', rid, docFull);
+      showToast('⚠️ Se sincronizará automáticamente');
+    }
+    fbUpdate('logActividad','log_'+Date.now(),{usuario:CU.user,rol:CU.role,tipo:'EDICION',fecha:today(),hora:hora2,
+      detalle:'Editó remisión '+(updates.clienteNombre||rid),valor:0});
+  })();
 }
 window.abrirEditarVenta  = abrirEditarVenta;
 window.cerrarEditarVenta = cerrarEditarVenta;
